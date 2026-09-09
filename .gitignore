@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtualenvs (two separate envs -- see README.md's Environment setup)
+.venv/
+.venv-tqec/
+
+# OS
+.DS_Store

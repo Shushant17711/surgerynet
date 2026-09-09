@@ -1,0 +1,5 @@
+{"experiment": "E3", "decoder": "gnn", "observable_kind": "spacelike", "status": "ok", "distance": null, "k": 1, "p": 0.002, "seed": 0, "logical_error_rate": 0.2823333442211151, "latency_seconds": null, "extra": {"zero_shot": true, "shots": 3000}}
+{"experiment": "E3", "decoder": "gnn", "observable_kind": "spacelike", "status": "ok", "distance": null, "k": 1, "p": 0.002, "seed": 1, "logical_error_rate": 0.3266666531562805, "latency_seconds": null, "extra": {"zero_shot": true, "shots": 3000}}
+{"experiment": "E3", "decoder": "gnn", "observable_kind": "spacelike", "status": "ok", "distance": null, "k": 1, "p": 0.002, "seed": 2, "logical_error_rate": 0.3526666760444641, "latency_seconds": null, "extra": {"zero_shot": true, "shots": 3000}}
+{"experiment": "E3", "decoder": "mlp", "observable_kind": "spacelike", "status": "infeasible", "distance": null, "k": null, "p": null, "seed": null, "logical_error_rate": null, "latency_seconds": null, "extra": {}}
+{"experiment": "E3", "decoder": "cnn", "observable_kind": "spacelike", "status": "infeasible", "distance": null, "k": null, "p": null, "seed": null, "logical_error_rate": null, "latency_seconds": null, "extra": {}}

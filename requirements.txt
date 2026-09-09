@@ -1,0 +1,8 @@
+stim
+pymatching
+sinter
+numpy
+scipy
+torch
+torch_geometric
+wandb

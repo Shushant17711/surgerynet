@@ -1,0 +1,12 @@
+{"experiment": "E7", "decoder": "gnn", "observable_kind": "spacelike", "status": "ok", "distance": null, "k": 1, "p": 0.002, "seed": 0, "logical_error_rate": 0.11400000005960464, "latency_seconds": null, "extra": {}}
+{"experiment": "E7", "decoder": "mwpm", "observable_kind": "spacelike", "status": "ok", "distance": null, "k": 1, "p": 0.002, "seed": 0, "logical_error_rate": 0.047, "latency_seconds": null, "extra": {}}
+{"experiment": "E7", "decoder": "gnn", "observable_kind": "timelike", "status": "ok", "distance": null, "k": 1, "p": 0.002, "seed": 0, "logical_error_rate": 0.35600000619888306, "latency_seconds": null, "extra": {}}
+{"experiment": "E7", "decoder": "mwpm", "observable_kind": "timelike", "status": "ok", "distance": null, "k": 1, "p": 0.002, "seed": 0, "logical_error_rate": 0.09033333333333333, "latency_seconds": null, "extra": {}}
+{"experiment": "E7", "decoder": "gnn", "observable_kind": "spacelike", "status": "ok", "distance": null, "k": 1, "p": 0.002, "seed": 1, "logical_error_rate": 0.11366666853427887, "latency_seconds": null, "extra": {}}
+{"experiment": "E7", "decoder": "mwpm", "observable_kind": "spacelike", "status": "ok", "distance": null, "k": 1, "p": 0.002, "seed": 1, "logical_error_rate": 0.04833333333333333, "latency_seconds": null, "extra": {}}
+{"experiment": "E7", "decoder": "gnn", "observable_kind": "timelike", "status": "ok", "distance": null, "k": 1, "p": 0.002, "seed": 1, "logical_error_rate": 0.23733332753181458, "latency_seconds": null, "extra": {}}
+{"experiment": "E7", "decoder": "mwpm", "observable_kind": "timelike", "status": "ok", "distance": null, "k": 1, "p": 0.002, "seed": 1, "logical_error_rate": 0.111, "latency_seconds": null, "extra": {}}
+{"experiment": "E7", "decoder": "gnn", "observable_kind": "spacelike", "status": "ok", "distance": null, "k": 1, "p": 0.002, "seed": 2, "logical_error_rate": 0.10966666787862778, "latency_seconds": null, "extra": {}}
+{"experiment": "E7", "decoder": "mwpm", "observable_kind": "spacelike", "status": "ok", "distance": null, "k": 1, "p": 0.002, "seed": 2, "logical_error_rate": 0.05, "latency_seconds": null, "extra": {}}
+{"experiment": "E7", "decoder": "gnn", "observable_kind": "timelike", "status": "ok", "distance": null, "k": 1, "p": 0.002, "seed": 2, "logical_error_rate": 0.24500000476837158, "latency_seconds": null, "extra": {}}
+{"experiment": "E7", "decoder": "mwpm", "observable_kind": "timelike", "status": "ok", "distance": null, "k": 1, "p": 0.002, "seed": 2, "logical_error_rate": 0.09333333333333334, "latency_seconds": null, "extra": {}}
