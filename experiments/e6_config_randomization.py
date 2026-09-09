@@ -19,6 +19,7 @@ from circuits.lattice_surgery import load_generated_circuit
 from data.generate import sample_shots
 from data.to_graph import GraphBuildContext, batch_to_graphs
 from experiments.common import ExperimentResult, evaluate_gnn, generate_surgery_circuit, train_gnn
+from schema import NUM_EDGE_FEATURES
 
 
 def _graphs_for_config(
@@ -41,14 +42,15 @@ def run(
     batch_size: int = 64,
     train_fraction: float = 0.7,
     seed: int = 0,
-    hidden_dim: int = 64,
+    hidden_dim: int = 128,
     num_layers: int = 6,
     conv_type: str = "transformer",
     heads: int = 2,
     use_norm: bool = True,
-    lr: float = 3e-4,
+    lr: float = 1e-3,
     weight_decay: float = 1e-4,
     device: str | None = None,
+    edge_dim: int | None = NUM_EDGE_FEATURES,
 ) -> ExperimentResult:
     swept = sweep_configurations(distances=distances, merge_round_multipliers=(1.0,))
     train_configs, held_out_configs = held_out_split(swept, train_fraction=train_fraction, seed=seed)
@@ -70,6 +72,7 @@ def run(
             train_graphs,
             hidden_dim=hidden_dim, num_layers=num_layers, conv_type=conv_type, heads=heads, use_norm=use_norm,
             lr=lr, weight_decay=weight_decay, epochs=epochs, batch_size=batch_size, seed=seed, device=device,
+            edge_dim=edge_dim,
         )
 
         train_eval_graphs: list[Data] = []

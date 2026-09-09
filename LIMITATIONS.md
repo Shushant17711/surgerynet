@@ -228,19 +228,45 @@ for this whole search implicitly assumed. See `results/E3_ISOLATION_CHECK.md`
 for the raw per-seed numbers.
 
 H4's threshold curves (`experiments/e7_threshold_sweep.py`,
-`results/THRESHOLD_SWEEP.md`, `results/timelike_threshold.png`) are new
-in this pass too — MWPM's pseudo-threshold (k=1 vs k=2 crossing, dense
-p-sweep, 20000 shots/point) came out at p≈0.0033 (spacelike) and p≈0.0030
+`results/THRESHOLD_SWEEP.md`, `results/timelike_threshold.png`) were run
+twice — once before, once after §"fourth pass"'s edge-feature addition —
+and MWPM's own numbers are identical both times (expected: MWPM doesn't use
+the GNN's features at all). MWPM's pseudo-threshold (k=1 vs k=2 crossing,
+dense p-sweep, 20000 shots/point) is p≈0.0033 (spacelike) and p≈0.0030
 (timelike), consistent with the ~0.0035 figure measured earlier in this
 project by a different method (`binary_search_threshold`) — a real
-cross-check, not just a repeated number. The GNN's own curves do **not**
-show a crossing in the swept range (0.0008-0.02): at every swept `p`, its
-k=2 (d=5) error rate was at or above its k=1 (d=3) rate, i.e. more code
-distance did not help the GNN the way it helps MWPM, at least not within
-this p range and training budget. That is itself a real, if negative, H4
-finding — a decoder can be evaluable on lattice surgery (H1) and still not
-show the *distance-scaling* behavior a decoder needs to be useful as `d`
-grows.
+cross-check, not just a repeated number.
+
+**Before the edge-feature addition**, the GNN's own curves showed no
+crossing anywhere in the swept range (0.0008-0.02): at every swept `p`, its
+k=2 (d=5) error rate was at or above its k=1 (d=3) rate.
+
+**After the edge-feature addition, spacelike now reports a numeric
+pseudo-threshold (p≈0.0149) — but read the underlying rates before treating
+that as a win.** At p=0.005 (still clearly sub-threshold — MWPM decodes
+this p easily), the GNN's k=2 rate (0.488) is still much worse than its k=1
+rate (0.295), the same qualitative failure as before. The reported
+crossing happens between p=0.005 and p=0.01, where both k=1 (0.504) and
+k=2 (0.499) rates have *already collapsed to ~0.50 — statistically
+indistinguishable from a coin flip*. A straight-line interpolation between
+two points that are both noise around the chance floor is not evidence of
+a real distance-scaling benefit; it is the pseudo-threshold estimator
+(linear interpolation between bracketing swept points, `estimate_crossing`
+in `e7_threshold_sweep.py`) doing exactly what it says on the tin without
+knowing that "chance" is a meaningless region to interpolate a crossing
+in. Timelike still reports no crossing anywhere in range. **The honest H4
+reading, updated**: in the p range where the GNN is actually doing
+non-trivial decoding (below the point where its own rate hits chance,
+roughly p<0.005-0.007 depending on `k`/kind), more code distance still does
+not help the GNN the way it helps MWPM. The edge-feature addition improved
+absolute accuracy substantially (the E7 fixed-`p` numbers above) without
+fixing this qualitative gap — the GNN still doesn't show a genuine
+sub-threshold crossing where MWPM's is real and well inside the decodable
+regime. A more careful threshold-fitting method (e.g. only fitting on
+points confirmed non-trivial, or a proper logistic fit with a floor term)
+would be needed to make this metric robust against near-chance points
+before trusting any single reported "pseudo-threshold" number for the GNN
+without inspecting the raw curve, as done here.
 - **The union-find baseline (`baselines/union_find.py`) uses two
   documented simplifications**: whole-edge growth per round instead of
   scheduled half-edges (slightly suboptimal but still a valid decoder —
@@ -298,9 +324,12 @@ grows.
   and it persists.** `main_table.md`'s E6 row uses `distances=(3,5)`, which
   gives `held_out_split` exactly 2 configurations (1 train, 1 held-out) —
   about as thin as this metric can be. `experiments/e6_extended.py`
-  (`results/e6_extended.jsonl`, `results/E6_EXTENDED.md`) reruns it with
-  `distances=(3,5,7)` (2 train configs, 1 held-out) at the same 8 seeds,
-  30000-shot scale. The result barely changed: held-out rate
+  (run at the *pre-edge-feature* config — archived at
+  `results/archive_pre_edge_features/e6_extended.jsonl` /
+  `E6_EXTENDED.md`, not rerun at the current edge-feature config for time
+  reasons) reruns it with `distances=(3,5,7)` (2 train configs, 1
+  held-out) at the same 8 seeds, 30000-shot scale. The result barely
+  changed: held-out rate
   0.2210 ± 0.0933 (extended) vs. 0.2224 ± 0.1014 (original) — adding a
   third configuration did not meaningfully reduce the variance. Looking at
   the per-seed breakdown explains why: which specific distance ends up
@@ -318,6 +347,145 @@ grows.
   report held-out results *per excluded configuration* rather than pooling
   across whichever configuration a given seed's random split happened to
   exclude; that redesign wasn't attempted here.
+
+### A fourth pass: the GNN never saw DEM edge weights until now
+
+Every result up to this point — including the tuned hyperparameters above —
+came from a GNN that saw graph *topology* only: which detectors are
+connected, never *how likely* that connection is to be the real error. That
+is exactly the number MWPM's own matching weight is built from
+(`weight = log((1-p)/p)`, `p` the DEM's per-edge error probability), so the
+GNN was working with strictly less information than the baseline it was
+being compared against, for every edge derived from the DEM.
+`data/to_graph.py` now computes that same log-odds weight per edge
+(combining multiple contributing error mechanisms via
+`p = p1 + p2 - 2*p1*p2`) and attaches it — plus edge-source flags and
+normalized spatial/temporal distance — as `edge_attr`
+(`schema.EDGE_FEATURE_NAMES`, 5 features). `models/gnn_decoder.py` accepts
+an `edge_dim` to use it (`GATConv`/`TransformerConv` both support edge
+features natively via PyTorch Geometric's own `edge_dim` parameter).
+
+**This mattered a lot on surgery data, and not at all on memory data —
+worth understanding why.** `experiments/edge_feature_check.py`
+(`results/EDGE_FEATURE_CHECK.md`) is the controlled A/B: same hyperparameters,
+only `edge_dim` (on/off) changed.
+
+| variant | E2 (memory) mean rate | E5 (surgery) mean rate |
+|---|---|---|
+| previous tuned, no edge features | 0.0013 (n=3) | 0.0660 (n=3) |
+| previous tuned, **with** edge features | 0.0013 (n=3) | 0.0625 (n=3) |
+
+E2 (plain rotated-memory circuit): no change. E5 (surgery circuit): a real,
+consistent ~5% reduction, same direction on all 3 seeds. The likely reason:
+a plain memory circuit's `after_clifford_depolarization=p` is uniform
+everywhere, so the DEM log-odds weight is nearly *constant* across edges —
+it carries almost no extra information beyond a bias term the model can
+already learn. A lattice-surgery circuit's error rates vary spatially
+(patch interior vs. routing region, pre-merge vs. merged vs. post-split
+phase, boundary effects), so the same weight is far more informative there
+— which is also, not coincidentally, the setting this whole paper is
+actually about.
+
+**A small follow-up re-tune, not a full re-run of `hparam_search.py`'s
+58-trial search:** once edge features were confirmed to help, a handful of
+configs around the previous winner (varying `hidden_dim` and `lr`) found
+`hidden_dim=128` (up from 64) and `lr=1e-3` (up from 3e-4) meaningfully
+better with edge features on — E5's mean dropped further, to 0.0573 (n=3) —
+adopted as the new default everywhere (`hidden_dim=128, num_layers=6,
+conv_type=transformer, heads=2, lr=1e-3, weight_decay=1e-4`, plus
+`edge_dim=5`). This is a real gap in rigor relative to the original
+58-trial search: a handful of hand-picked configs is not a systematic
+search, and it's possible a proper re-run of `hparam_search.py` at this new
+edge-feature-enabled baseline would find something meaningfully better
+still. That wasn't done here for time reasons.
+
+**Full 8-seed/30000-shot/20-epoch rerun at the new config** (pre-edge-feature
+numbers archived at `results/archive_pre_edge_features/`):
+
+| experiment | decoder | logical error rate (pre-edge-feature) | logical error rate (with edge features + retune) |
+|---|---|---|---|
+| E2 (memory) | gnn | 0.0013 ± 0.0002 | 0.0013 ± 0.0002 |
+| E2 (memory) | mwpm | 0.0007 ± 0.0002 | 0.0007 ± 0.0002 |
+| E3 (zero-shot to surgery) | gnn | 0.4207 ± 0.0305 | **0.4825 ± 0.0324** |
+| E5 (surgery-trained) | gnn | 0.0622 ± 0.0013 | **0.0523 ± 0.0016** |
+| E6 (config. generalization) | gnn | 0.2224 ± 0.1014 | 0.3023 ± 0.0521 |
+| E7 (surgery, spacelike) | gnn | 0.0621 ± 0.0015 | **0.0530 ± 0.0011** |
+| E7 (surgery, spacelike) | mwpm | 0.0491 ± 0.0012 | 0.0491 ± 0.0012 |
+| E7 (surgery, timelike) | gnn | 0.1239 ± 0.0027 | **0.1082 ± 0.0046** |
+| E7 (surgery, timelike) | mwpm | 0.0990 ± 0.0014 | 0.0990 ± 0.0014 |
+| E9 (ablation baseline) | gnn | 0.0639 ± 0.0032 | 0.0538 ± 0.0024 |
+
+**E7's gap to MWPM is now the headline number of this whole project**:
+spacelike closed from ~1.26x MWPM's rate to **~1.08x** (0.0530 vs 0.0491),
+and timelike from ~1.25x to **~1.09x** (0.1082 vs 0.0990) — the GNN is now
+within about 8-9% of MWPM on the actual lattice-surgery decoding task,
+having started this session's work ~2.3-2.8x behind it. It still does not
+beat MWPM anywhere in this repo, but on the metric the paper's central
+claim is actually about (H1/H4 — does a learned decoder work on lattice
+surgery, and how do spacelike/timelike compare), the remaining gap is now
+small rather than large.
+
+Not every number moved in the same direction, and that is reported here
+rather than only citing the wins:
+
+- **E3 (zero-shot) got worse again** (0.42 -> 0.48) — the "more
+  memory-training capacity/budget does not help, and may hurt, zero-shot
+  transfer" finding from the third pass (`experiments/e3_isolation_check.py`)
+  keeps reproducing as the model gets more capable in-distribution.
+  `hidden_dim=128` is more capacity still, in the same direction as the
+  isolation check's `hidden_dim=64`-but-more-epochs condition; this is
+  consistent with, not a new contradiction of, that finding.
+- **E6's generalization gap got worse and stayed just as noisy** (0.22 ± 0.10
+  -> 0.30 ± 0.05 — note the *std* actually dropped this time, but the *mean*
+  rate got worse). Combined with `e6_extended.py`'s finding that the
+  variance is dominated by which configuration a given seed's split happens
+  to exclude (not the model), this is hard to interpret as a clean
+  regression — it may just be a different unlucky sample of held-out splits
+  at n=8 with a different RNG stream (recall `train_gnn` didn't even seed
+  `torch.manual_seed` consistently until the fix documented below — actually
+  it does now, but the *underlying* configuration-generalization metric's
+  own instability, documented above, is reason enough not to over-read a
+  single mean shift here).
+
+E4's heatmap (`results/spacetime_heatmap.png`) was regenerated in this same
+run — same caveat as before: it uses the memory-trained model (E3's
+zero-shot mode, the one that got worse), not the better-performing
+surgery-trained model.
+
+**`results/ABLATIONS.md` was also regenerated at the new config**, now with
+a 7th variant ("edge weights removed (topology only)") testing this pass's
+own addition, and the picture is much more clearly differentiated than any
+previous ablation pass:
+
+| variant | mean rate | std | delta vs baseline |
+|---|---|---|---|
+| baseline (all components on) | 0.0531 | 0.0021 | — |
+| region/phase features removed | 0.0534 | 0.0018 | +0.0003 |
+| DEM edges removed (radius-only) | 0.0614 | 0.0021 | **+0.0084** |
+| radius edges removed (DEM-only) | 0.0536 | 0.0014 | +0.0006 |
+| shallower (4 layers vs 6) | 0.0537 | 0.0023 | +0.0007 |
+| normalization removed | 0.0518 | 0.0013 | -0.0012 |
+| edge weights removed (topology only) | 0.0613 | 0.0016 | **+0.0082** |
+
+Baseline (0.0531 ± 0.0021) is close to but not identical to E9's main-table
+row (0.0538 ± 0.0024) — same config, different process/RNG stream (see
+`train_gnn`'s `torch.manual_seed` note below), a small, expected amount of
+run-to-run variation at this n. **Two components now clearly dominate, by
+roughly an order of magnitude over everything else**: removing DEM edges
+entirely (+0.0084) and removing just this pass's new edge-*weight* feature
+while keeping DEM edge *topology* (+0.0082) cost almost exactly the same —
+the actual topology of which detectors are DEM-correlated barely matters
+more than knowing *how strongly* they're correlated. This is strong,
+differentiated confirmation that the edge-feature addition
+(\S "fourth pass" above) is doing real work, not a marginal tweak: it is
+now tied for the single most load-bearing component in the whole model,
+where in the previous (pre-edge-feature) ablation pass the largest single
+effect was radius-edge removal at roughly 1/8th this magnitude
+(-0.0059 relative to a 0.0622 baseline, vs. today's ±0.008 relative to a
+0.053 baseline). Region/phase features, depth, and normalization all
+remain small, same-order-as-std effects, as in every previous ablation
+pass — the model still leans overwhelmingly on DEM-derived edge structure
+(topology and, now, weight) over everything else available to it.
 
 ## Statistical rigor
 

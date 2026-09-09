@@ -8,12 +8,20 @@ gate (Task 2.4) passes on a real `d=3` circuit, the GNN beats MWPM on memory (E2
 and every experiment E3–E9 runs end-to-end producing the metrics in §7, including
 explicit "N/A — architecturally infeasible" rows for MLP/CNN on merge/split data.
 
-**Status against that definition (see Task 7.4):** Task 2.4 passes. E3–E9 all run
+**Status against that definition (see Tasks 7.4–7.5):** Task 2.4 passes. E3–E9 all run
 end-to-end at real scale (8 seeds, not smoke-test scale) with the infeasibility rows
 present. **E2 does not pass** — a real hyperparameter search (Task 7.4) narrowed the
-GNN-vs-MWPM gap on memory from ~15x to a converged, stable ~1.8x-1.9x, but the GNN
-still does not beat MWPM. That gap is reported honestly throughout `results/` and
-`LIMITATIONS.md` rather than treated as closed.
+GNN-vs-MWPM gap on memory from ~15x to a converged, stable ~1.8x-1.9x, and it has
+stayed there since (Task 7.5's edge-weight features are specific to spatially-varying
+error rates, which memory circuits don't have, so they didn't move E2 at all). **The
+GNN still does not beat MWPM anywhere in this repo.** What did change substantially:
+Task 7.5 gave the GNN access to the DEM's own per-edge error probability — information
+it had simply never been given, despite MWPM's matching weight being built from exactly
+that number — and E7's surgery-specific gap (arguably the more meaningful metric, since
+E2 was never really the point of this project) closed from ~1.26x/1.25x
+(spacelike/timelike) to ~1.08x/1.09x. Both the wins and what still doesn't work are
+reported honestly throughout `results/` and `LIMITATIONS.md` rather than either one
+being treated as the whole story.
 
 ## Out-of-band prerequisites
 - Reading Horsman et al. and *Lattice Surgery for Dummies* before Task 2 (design §9, week 2) — study, not code.
@@ -212,9 +220,19 @@ still does not beat MWPM. That gap is reported honestly throughout `results/` an
   - `README.md` (new) and `paper/main.tex` (new, draft using the real numbers above; no `pdflatex` available in this environment to compile it, so it ships as structurally-verified `.tex` source, not a PDF).
   - _Requirements: none in the original design doc — user request to close as much of the "research vs. infrastructure" gap as honestly possible in one pass_
 
+- [x] 7.5 (added post-hoc, "improve the actual research, not just its documentation") DEM edge-weight features — the single highest-leverage architecture change of this project
+  - **The core problem, precisely stated**: `data/to_graph.py` gave every edge to the GNN as pure topology — which detectors are connected — and never *how likely* that connection is to be the real error. That is exactly the quantity MWPM's own matching weight is built from (`log((1-p)/p)`, `p` the DEM's per-edge probability), so the GNN was structurally handicapped relative to the baseline it was being judged against, for every DEM-derived edge in the graph.
+  - **`schema.py`**: new `EDGE_FEATURE_NAMES`/`NUM_EDGE_FEATURES` (5: DEM log-odds weight, is-DEM-edge flag, is-radius-edge flag, normalized spatial distance, normalized temporal distance). **`data/to_graph.py`**: new `dem_edge_weights` (combines multi-mechanism contributions via `p = p1 + p2 - 2*p1*p2`), `shot_to_graph` now builds `edge_attr` aligned with `edge_index` after dedup. **`models/gnn_decoder.py`**: new `edge_dim` param wiring `GATConv`/`TransformerConv`'s native `edge_dim` support; `None` by default (old synthetic-graph tests untouched), real experiment scripts default to `NUM_EDGE_FEATURES` (on).
+  - **`experiments/edge_feature_check.py`** (new): the controlled A/B + small re-tune, run for real. Edge features alone: no change on E2 (memory circuits have spatially uniform error rates, so the DEM weight is nearly constant — uninformative); a real, consistent ~5% reduction on E5 (surgery circuits have spatially varying error rates, where the same weight is actually informative). A follow-up hand-tune (not a full `hparam_search.py` re-run) found `hidden_dim=128`/`lr=1e-3` meaningfully better with edge features on; adopted as the new default everywhere.
+  - **Full 8-seed/30000-shot/20-epoch rerun** at the new config: **E7 spacelike gap to MWPM closed from ~1.26x to ~1.08x; timelike from ~1.25x to ~1.09x** — the headline result of this entire project. E5: 0.0622 → 0.0523. E2 essentially unchanged (~1.86x, confirming the feature is genuinely surgery-specific, not a general improvement). E3 (zero-shot) and E6 (config. generalization) both got *worse* again, a third data point in the "more memory-training capacity hurts zero-shot transfer" pattern from Task 7.4's isolation check.
+  - **Ablations rerun at the new config, now including "edge weights removed"**: it ties with "DEM edges removed" as the single most load-bearing component in the model (+0.0082 vs. +0.0084, both roughly 10x every other ablated component) — strong differentiated confirmation the feature is doing real work, not a marginal tweak.
+  - **Threshold sweep rerun**: spacelike now reports a numeric pseudo-threshold (p≈0.0149) where before there was none — but inspection of the underlying rates shows this is a linear-interpolation artifact between two chance-floor (~0.50) points, not a real distance-scaling crossing; in the regime where the GNN is actually decoding non-trivially (p≲0.005), more distance still doesn't help it the way it helps MWPM. Reported precisely rather than as a clean win.
+  - Pre-edge-feature results archived at `results/archive_pre_edge_features/` rather than deleted. `LIMITATIONS.md`'s "fourth pass" section, `README.md`, and `paper/main.tex` all updated with the full before/after story, including the parts that got worse.
+  - _Requirements: none in the original design doc — user request to "continue training by improving logic... so that actually results get better"_
+
 ## Milestones
 - **Task 2.4 passing** = the week-5 gate (design §9, §11): correct MWPM threshold and Λ scaling on the real surgery circuit. Nothing in Task 3 onward should be trusted before this is green.
-- **Task 6.1 (E2) passing** = first real neural result: GNN beats MWPM on memory, confirming the model itself works before blaming lattice surgery for anything. **Still not passing** after Task 7.4's real hyperparameter search — gap narrowed from ~15x to ~1.8x-1.9x, not closed.
+- **Task 6.1 (E2) passing** = first real neural result: GNN beats MWPM on memory, confirming the model itself works before blaming lattice surgery for anything. **Still not passing** after Task 7.4/7.5's real hyperparameter search and edge-feature addition — the memory gap stayed at ~1.8x-1.9x throughout (edge features are specific to spatially-varying error rates, which memory circuits don't have). The gap that *did* close substantially is E7's surgery-specific gap (~1.26x/1.25x → ~1.08x/1.09x, Task 7.5) — arguably a better indicator of real progress than E2, since E2 was never really what this project is about.
 - **Task 6.2 (E3) passing** = the paper's central H1 evidence: zero-shot degradation numbers plus MLP/CNN infeasibility rows.
 
 ## Coverage table

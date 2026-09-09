@@ -17,6 +17,7 @@ from circuits.lattice_surgery import load_generated_circuit
 from data.generate import sample_shots
 from data.to_graph import GraphBuildContext, batch_to_graphs
 from experiments.common import ExperimentResult, evaluate_gnn, generate_surgery_circuit, train_gnn
+from schema import NUM_EDGE_FEATURES
 
 
 def _run_one_kind(
@@ -28,14 +29,15 @@ def _run_one_kind(
     epochs: int,
     batch_size: int,
     seed: int,
-    hidden_dim: int = 64,
+    hidden_dim: int = 128,
     num_layers: int = 6,
     conv_type: str = "transformer",
     heads: int = 2,
     use_norm: bool = True,
-    lr: float = 3e-4,
+    lr: float = 1e-3,
     weight_decay: float = 1e-4,
     device: str | None = None,
+    edge_dim: int | None = NUM_EDGE_FEATURES,
 ) -> tuple[float, float]:
     with tempfile.TemporaryDirectory() as tmp:
         out_path = Path(tmp) / f"k{k}_{kind}.stim"
@@ -50,6 +52,7 @@ def _run_one_kind(
             train_graphs,
             hidden_dim=hidden_dim, num_layers=num_layers, conv_type=conv_type, heads=heads, use_norm=use_norm,
             lr=lr, weight_decay=weight_decay, epochs=epochs, batch_size=batch_size, seed=seed, device=device,
+            edge_dim=edge_dim,
         )
 
         test_batch = sample_shots(circuit, shots=test_shots, seed=seed + 1)
@@ -72,14 +75,15 @@ def run(
     batch_size: int = 64,
     seed: int = 0,
     sanity_tolerance: float = 0.3,
-    hidden_dim: int = 64,
+    hidden_dim: int = 128,
     num_layers: int = 6,
     conv_type: str = "transformer",
     heads: int = 2,
     use_norm: bool = True,
-    lr: float = 3e-4,
+    lr: float = 1e-3,
     weight_decay: float = 1e-4,
     device: str | None = None,
+    edge_dim: int | None = NUM_EDGE_FEATURES,
 ) -> list[ExperimentResult]:
     """`sanity_tolerance` is deliberately loose (design §11's check is a
     coarse "did something go wildly wrong", not a precision comparison —
@@ -91,7 +95,7 @@ def run(
         gnn_rate, mwpm_rate = _run_one_kind(
             k, p, kind, train_shots, test_shots, epochs, batch_size, seed,
             hidden_dim=hidden_dim, num_layers=num_layers, conv_type=conv_type, heads=heads, use_norm=use_norm,
-            lr=lr, weight_decay=weight_decay, device=device,
+            lr=lr, weight_decay=weight_decay, device=device, edge_dim=edge_dim,
         )
         rates[kind] = {"gnn": gnn_rate, "mwpm": mwpm_rate}
         results.append(

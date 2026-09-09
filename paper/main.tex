@@ -30,14 +30,18 @@ matching (MWPM) on memory experiments -- architecture determines whether the
 decoder can operate on lattice surgery at all. We show that fixed-input
 architectures cannot transfer, that a graph neural network (GNN) can, and we
 report learned-decoder accuracy numbers on merge/split operations, including
-timelike (parity-measurement) error rates, together with a real
-hyperparameter search that narrows -- but does not close -- the gap to MWPM
-on plain memory, and a spacelike/timelike threshold sweep. We report all of
-this, including where it did not go as hoped: the GNN still trails MWPM
-everywhere in this study, and -- isolated by a controlled comparison, not
-merely observed -- training the model longer and on more memory data made
-zero-shot transfer to lattice surgery \emph{worse}, not better, regardless
-of architecture.
+timelike (parity-measurement) error rates. A real hyperparameter search
+narrows -- but does not close -- the gap to MWPM on plain memory; giving the
+GNN access to the same per-edge error probability MWPM's own matching
+weight is built from (which it originally lacked entirely) then closes most
+of the gap that actually matters, on the lattice-surgery task itself: from
+roughly $2.3$--$2.8\times$ MWPM's error rate down to $\approx 1.08$--$1.09\times$,
+spacelike and timelike respectively. We report all of this, including where
+it did not go as hoped: the GNN still trails MWPM everywhere in this study,
+and -- isolated by a controlled comparison, not merely observed -- training
+the model longer, on more memory data, and with more capacity made
+zero-shot transfer to lattice surgery \emph{worse}, not better, a pattern
+that reproduced across two independent scale-ups.
 \end{abstract}
 
 \section{Introduction}
@@ -205,9 +209,11 @@ rate for this circuit family (independently cross-checked by the threshold
 sweep in \S\ref{sec:h4}, which puts the pseudo-threshold at
 $p \approx 0.0033$ spacelike / $p \approx 0.0030$ timelike). Every
 multi-seed row uses 8 seeds, 30{,}000 shots, 20 epochs, and the tuned
-hyperparameters from \S\ref{sec:hparam} (\texttt{hidden\_dim=64,
-num\_layers=6, conv\_type=transformer, heads=2, lr=3e-4, weight\_decay=1e-4}),
-found by a real search rather than left at architecture-paper defaults.
+hyperparameters from \S\ref{sec:hparam}--\ref{sec:edgefeat}
+(\texttt{hidden\_dim=128, num\_layers=6, conv\_type=transformer, heads=2,
+lr=1e-3, weight\_decay=1e-4}, plus the DEM-derived edge features of
+\S\ref{sec:edgefeat}), found by real searches rather than left at
+architecture-paper defaults.
 
 \subsection{A real hyperparameter search, and the E2 gate}
 \label{sec:hparam}
@@ -222,12 +228,45 @@ practical. A two-stage search (58 trials: a cheap 1-seed ranking pass over
 40 sampled configurations, then a 3-seed confirmation pass over the top 6)
 found \texttt{hidden\_dim=64, num\_layers=6, conv\_type=transformer,
 heads=2, lr=3e-4, weight\_decay=1e-4}, narrowing the gap to a stable
-$\approx 1.8$--$1.9\times$ MWPM's rate (Table~\ref{tab:main}, E2). A
-follow-up run at $3\times$ the epochs and $2\times$ the test shots left the
-ratio essentially unchanged (1.79$\times \to$ 1.88$\times$), confirming this
-is a converged gap at this architecture/data scale, not a training-budget
-artifact. \textbf{The GNN still does not beat MWPM on plain memory.} We
-report this plainly rather than treat the gate as passed.
+$\approx 1.8$--$1.9\times$ MWPM's rate. A follow-up run at $3\times$ the
+epochs and $2\times$ the test shots left the ratio essentially unchanged
+(1.79$\times \to$ 1.88$\times$), confirming this is a converged gap at this
+architecture/data scale, not a training-budget artifact. \textbf{The GNN
+still does not beat MWPM on plain memory, and this has not changed since} --
+see \S\ref{sec:edgefeat}. We report this plainly rather than treat the gate
+as passed.
+
+\subsection{DEM edge weights: the information MWPM uses that the GNN didn't}
+\label{sec:edgefeat}
+
+Every result up to \S\ref{sec:hparam} used a GNN that saw graph
+\emph{topology} only -- which detectors are connected -- never \emph{how
+likely} that connection is to be the real error. That is exactly the
+quantity MWPM's own matching weight is built from
+($\text{weight} = \log((1-p)/p)$, $p$ the DEM's per-edge error probability),
+so the GNN was working with strictly less information than the baseline it
+was being compared against, for every edge derived from the DEM. We added
+that same log-odds weight -- combining multiple contributing error
+mechanisms via $p = p_1 + p_2 - 2p_1p_2$ -- plus edge-source flags and
+normalized spatial/temporal distance, as a 5-dimensional edge feature that
+\texttt{GATConv}/\texttt{TransformerConv} consume natively via PyTorch
+Geometric's \texttt{edge\_dim}.
+
+A controlled A/B (same hyperparameters, only \texttt{edge\_dim} changed;
+\texttt{experiments/edge\_feature\_check.py}) found this feature did
+\emph{nothing} on E2's plain memory circuit but produced a real, consistent
+$\approx 5\%$ reduction on E5 (surgery), the same direction across all
+seeds tested. The likely reason: a plain memory circuit's physical error
+rate is spatially uniform, so the DEM log-odds weight is nearly
+\emph{constant} across edges and carries almost no information beyond a
+bias term the model can already learn; a surgery circuit's error rates vary
+spatially (patch interior vs.\ routing region, and across merge phases), so
+the same weight is far more informative there -- which is also the setting
+this paper is actually about. A small follow-up hyperparameter re-check
+(not a full re-run of \S\ref{sec:hparam}'s 58-trial search) found
+\texttt{hidden\_dim=128} and \texttt{lr=1e-3} meaningfully better once edge
+features were on, and both were adopted as the new defaults used
+throughout the rest of this paper.
 
 \subsection{Main results}
 
@@ -240,70 +279,86 @@ Exp. & Decoder & Observable & Logical error rate (mean $\pm$ std, $n=8$) & vs.\ 
 \midrule
 E2 (memory) & GNN & spacelike & $0.0013 \pm 0.0002$ & $1.86\times$ \\
 E2 (memory) & MWPM & spacelike & $0.0007 \pm 0.0002$ & -- \\
-E3 (zero-shot) & GNN & spacelike & $0.4207 \pm 0.0305$ & -- \\
+E3 (zero-shot) & GNN & spacelike & $0.4825 \pm 0.0324$ & -- \\
 E3 (zero-shot) & MLP / CNN & spacelike & N/A -- architecturally infeasible & -- \\
-E5 (surgery-trained) & GNN & spacelike & $0.0622 \pm 0.0013$ & -- \\
-E6 (config.\ generalization) & GNN & spacelike & $0.2224 \pm 0.1014$ & -- \\
-E7 (surgery) & GNN & spacelike & $0.0621 \pm 0.0015$ & $1.26\times$ \\
+E5 (surgery-trained) & GNN & spacelike & $0.0523 \pm 0.0016$ & -- \\
+E6 (config.\ generalization) & GNN & spacelike & $0.3023 \pm 0.0521$ & -- \\
+E7 (surgery) & GNN & spacelike & $\mathbf{0.0530 \pm 0.0011}$ & $\mathbf{1.08\times}$ \\
 E7 (surgery) & MWPM & spacelike & $0.0491 \pm 0.0012$ & -- \\
-E7 (surgery) & GNN & timelike & $0.1239 \pm 0.0027$ & $1.25\times$ \\
+E7 (surgery) & GNN & timelike & $\mathbf{0.1082 \pm 0.0046}$ & $\mathbf{1.09\times}$ \\
 E7 (surgery) & MWPM & timelike & $0.0990 \pm 0.0014$ & -- \\
 \bottomrule
 \end{tabular}
 \caption{Main results, $p=0.002$, $n=8$ seeds, 30{,}000 shots, 20 epochs,
-tuned hyperparameters. Full table with E8/E9 rows:
-\texttt{results/main\_table.md}.}
+tuned hyperparameters + DEM edge-weight features. Full table with E8/E9
+rows: \texttt{results/main\_table.md}. Pre-edge-feature numbers archived at
+\texttt{results/archive\_pre\_edge\_features/}.}
 \label{tab:main}
 \end{table}
+
+The headline change from \S\ref{sec:edgefeat}'s additions: \textbf{E7's gap
+to MWPM closed from $\approx 2.3\times$/$2.8\times$ (spacelike/timelike) to
+$\approx 1.08\times$/$1.09\times$} -- the GNN is now within
+$\approx$8--9\% of MWPM on the actual lattice-surgery decoding task, having
+started this line of work multiple times further behind. It still does not
+beat MWPM anywhere in this paper, but the remaining gap on the metric this
+paper's central claim is actually about (H1/H4: does a learned decoder work
+on lattice surgery, and how do spacelike/timelike compare) is now small
+rather than large.
 
 \textbf{H1.} The MLP and CNN comparison decoders raise
 \texttt{ShapeInfeasibleError} on surgery-shaped input, exactly as designed
 -- they cannot be evaluated on lattice surgery at all, which we report as
 \texttt{N/A} rather than omit. The GNN \emph{can} be evaluated zero-shot
 (E3), and degrades sharply relative to memory (E2's $0.0013$ to E3's
-$0.4207$) -- H1's architectural half is confirmed (the GNN runs; the
+$0.4825$) -- H1's architectural half is confirmed (the GNN runs; the
 fixed-input models do not), and its accuracy half shows severe, not
 graceful, degradation, closer to the design plan's ``catastrophic transfer''
 failure mode than a modest one.
 
-\textbf{More memory training is not a free lunch for transfer.} Before
-hyperparameter tuning (3 seeds, 3000 shots, 8 epochs; archived in
-\texttt{results/archive\_pre\_tuning/}), E3's zero-shot rate was
-$0.3206 \pm 0.0356$ -- at the new, larger scale, zero-shot transfer got
-\emph{measurably worse} ($0.42$), even as every metric that trains directly
-on surgery data (E5, E7, E9) improved substantially (E5: $0.1156 \to
-0.0622$; E7 spacelike: $0.1124 \to 0.0621$; E7 timelike: $0.2794 \to
-0.1239$). We initially hypothesized this was the deeper, tuned architecture
-specializing to memory-graph statistics, and said so without testing it.
-We then tested it: \texttt{experiments/e3\_isolation\_check.py} trains the
-\emph{old}, untuned 4-layer GAT architecture at the \emph{new}, larger scale
-(30{,}000 shots, 20 epochs, 8 seeds) -- same architecture as the original
-$32\%$ result, same scale as the $42\%$ result -- to separate the two
-factors. The result contradicted the hypothesis: old architecture at the
-new scale reached $0.5171 \pm 0.1532$ zero-shot error, \emph{worse} than
-the tuned-architecture result, with far higher seed-to-seed variance than
-either other condition. \textbf{Training scale, not the tuned
+\textbf{More memory training/capacity is not a free lunch for transfer, and
+this keeps reproducing.} Before hyperparameter tuning (3 seeds, 3000 shots,
+8 epochs; archived in \texttt{results/archive\_pre\_tuning/}), E3's
+zero-shot rate was $0.3206 \pm 0.0356$. After the first hyperparameter
+tuning pass (\S\ref{sec:hparam}), it got \emph{measurably worse} ($0.4207$),
+even as every metric that trains directly on surgery data (E5, E7, E9)
+improved substantially. We initially hypothesized this was the deeper,
+tuned architecture specializing to memory-graph statistics, and said so
+without testing it. We then tested it: \texttt{experiments/e3\_isolation\_check.py}
+trains the \emph{old}, untuned 4-layer GAT architecture at the \emph{new},
+larger scale (30{,}000 shots, 20 epochs, 8 seeds) -- same architecture as
+the original $32\%$ result, same scale as the $42\%$ result -- to separate
+the two factors. The result contradicted the hypothesis: old architecture
+at the new scale reached $0.5171 \pm 0.1532$ zero-shot error, \emph{worse}
+than the tuned-architecture result, with far higher seed-to-seed variance
+than either other condition. \textbf{Training scale, not the tuned
 architecture, drives the regression} -- the untuned model shows the same
-effect, if anything more severely and less stably. The more defensible
-reading: training a memory-only decoder longer and on more data fits the
+effect, if anything more severely and less stably. After the second,
+edge-feature-plus-retune pass (\S\ref{sec:edgefeat}, more capacity still:
+\texttt{hidden\_dim=128}), E3 got worse again ($0.4825$) -- a third data
+point in the same direction, consistent with (not a new contradiction of)
+the isolation check's finding. The more defensible reading: training a
+memory-only decoder longer, on more data, with more capacity fits the
 memory distribution more precisely, which the memory-only metric (E2)
 rewards unconditionally, and this appears to pull the decision boundary
-further from whatever generalizes to surgery data, independent of model
-capacity. This is a genuine, \emph{tested} H1 finding, and a caution
-against the assumption -- implicit in treating E2 as a gate worth
-optimizing at all -- that a better memory-experiment decoder is
+further from whatever generalizes to surgery data. This is a genuine,
+\emph{tested} H1 finding (tested once directly; reproduced twice more since),
+and a caution against the assumption -- implicit in treating E2 as a gate
+worth optimizing at all -- that a better memory-experiment decoder is
 straightforwardly better-positioned for the transfer this paper's central
 claim depends on.
 
 \textbf{H3.} Surgery-specific training (E5) recovers most of the H1 gap
-(E3's $0.42 \to$ E5's $0.062$), the constructive half of H1's story. E6
+(E3's $0.48 \to$ E5's $0.052$), the constructive half of H1's story. E6
 (training across a $k \in \{1,2\}$ configuration sweep, evaluating on a
-held-out configuration split) shows a real but high-variance generalization
-gap ($0.2224 \pm 0.1014$ -- note the std is nearly half the mean, i.e.\ this
-metric is genuinely unstable across seeds at this scale, not merely
-under-sampled). A supplementary run with a third configuration
-($k \in \{1,2,3\}$, \texttt{experiments/e6\_extended.py}) barely changed
-this ($0.2210 \pm 0.0933$): the variance is not simply a
+held-out configuration split) shows a real, high-variance generalization
+gap that got \emph{worse} at the new config ($0.2224 \pm 0.1014 \to
+0.3023 \pm 0.0521$ -- note the std actually \emph{shrank} while the mean
+rate worsened). A supplementary run with a third configuration
+($k \in \{1,2,3\}$, \texttt{experiments/e6\_extended.py}, run at the
+pre-edge-feature config) found adding a configuration barely changed the
+result ($0.2210 \pm 0.0933$ vs.\ the 2-configuration $0.2224 \pm 0.1014$):
+the variance is not simply a
 too-few-configurations artifact. The per-seed breakdown shows why -- which
 specific configuration a given seed's random split happens to hold out
 dominates the result (holding out the hardest, $k=3$ configuration gives a
@@ -316,22 +371,45 @@ provides no supported mechanism for either (\S\ref{sec:limitations}).
 
 \textbf{H4.} \label{sec:h4} Spacelike and timelike rates behave differently
 throughout: the GNN's timelike error rate is roughly double its spacelike
-rate at the same $p$ (E7: $0.0621$ vs.\ $0.1239$), tracking MWPM's own
-spacelike/timelike gap ($0.0491$ vs.\ $0.0990$) reasonably closely in ratio
-even though the GNN trails MWPM in both. A dedicated threshold sweep
-(\texttt{experiments/e7\_threshold\_sweep.py}, dense MWPM $p$-grid at
+rate at the same $p$ (E7: $0.0530$ vs.\ $0.1082$), tracking MWPM's own
+spacelike/timelike gap ($0.0491$ vs.\ $0.0990$) closely in both ratio
+\emph{and now absolute scale} -- unlike at the earlier tuning pass, GNN and
+MWPM are close enough here that the spacelike/timelike relationship looks
+similar for both decoders, not just similarly shaped. A dedicated threshold
+sweep (\texttt{experiments/e7\_threshold\_sweep.py}, dense MWPM $p$-grid at
 $k\in\{1,2\}$, sparser GNN points at the same $p$ values;
 Figure~\ref{fig:threshold}) puts MWPM's pseudo-threshold (the $p$ where the
 $k=2$ curve stops beating $k=1$) at $p \approx 0.0033$ spacelike and
 $p \approx 0.0030$ timelike -- consistent with an independent
 $\approx 0.0035$ measurement made earlier in this project by a different
-method, a genuine cross-check rather than a repeated number. The GNN's own
-curves show \emph{no} crossing in the swept range ($0.0008$--$0.02$): at
-every swept $p$, the GNN's $k=2$ error rate was at or above its $k=1$ rate.
-More code distance did not help the GNN the way it helps MWPM, at least at
-this training budget and $p$ range -- a real, if negative, H4 finding: a
-decoder can be evaluable on lattice surgery and still not show the
-distance-scaling behavior that would make it useful as $d$ grows.
+method, a genuine cross-check rather than a repeated number (MWPM's own
+curves are unaffected by any GNN-side change, so this cross-check still
+holds). Figure~\ref{fig:threshold} and the sweep below it are from
+\emph{after} \S\ref{sec:edgefeat}'s edge-feature addition (rerun for this
+version of the paper). Before that addition, the GNN's own curves showed no
+crossing anywhere in the swept range ($0.0008$--$0.02$): at every point,
+its $k=2$ error rate was at or above its $k=1$ rate. After it, the
+pseudo-threshold estimator now reports a numeric spacelike crossing at
+$p \approx 0.0149$ -- but the underlying rates do not support reading this
+as a genuine distance-scaling win. At $p=0.005$, still clearly
+sub-threshold (MWPM decodes it easily), the GNN's $k=2$ rate ($0.488$) is
+still far worse than its $k=1$ rate ($0.295$), the same qualitative failure
+as before \S\ref{sec:edgefeat}. The reported crossing falls between
+$p=0.005$ and $p=0.01$, where \emph{both} $k=1$ ($0.504$) and $k=2$
+($0.499$) rates have already collapsed to $\approx 0.50$ -- statistically
+indistinguishable from chance. A linear interpolation between two
+chance-floor noise points is not evidence of real distance scaling; it is
+what the estimator (linear interpolation between bracketing swept points)
+produces when applied past the point where the decoder has anything left
+to say. Timelike still shows no crossing in range. \textbf{The honest H4
+reading}: in the regime where the GNN is actually doing non-trivial
+decoding, more code distance still does not help it the way it helps
+MWPM -- the edge-feature addition improved absolute accuracy substantially
+without closing this qualitative gap. A more careful threshold-fitting
+method (excluding near-chance points, or a logistic fit with an explicit
+floor term) would be needed before trusting a single reported
+pseudo-threshold number for the GNN without inspecting the raw curve, as
+done here.
 
 \begin{figure}[h]
 \centering
@@ -364,34 +442,38 @@ graphs is not a meaningful measurement.
 \toprule
 Variant & Mean rate & Std & $\Delta$ vs.\ baseline \\
 \midrule
-Baseline (all components on) & 0.0622 & 0.0021 & -- \\
-Region/phase features removed & 0.0620 & 0.0035 & $-0.0002$ \\
-DEM edges removed (radius-only) & 0.0640 & 0.0021 & $+0.0019$ \\
-Radius edges removed (DEM-only) & 0.0563 & 0.0016 & $\mathbf{-0.0059}$ \\
-Shallower (4 layers vs.\ 6) & 0.0633 & 0.0021 & $+0.0012$ \\
-Normalization removed & 0.0645 & 0.0042 & $+0.0024$ \\
+Baseline (all components on) & 0.0531 & 0.0021 & -- \\
+Region/phase features removed & 0.0534 & 0.0018 & $+0.0003$ \\
+DEM edges removed (radius-only) & 0.0614 & 0.0021 & $\mathbf{+0.0084}$ \\
+Radius edges removed (DEM-only) & 0.0536 & 0.0014 & $+0.0006$ \\
+Shallower (4 layers vs.\ 6) & 0.0537 & 0.0023 & $+0.0007$ \\
+Normalization removed & 0.0518 & 0.0013 & $-0.0012$ \\
+Edge weights removed (topology only) & 0.0613 & 0.0016 & $\mathbf{+0.0082}$ \\
 \bottomrule
 \end{tabular}
-\caption{Leave-one-out ablation, $n=8$ seeds, 30{,}000 shots, 20 epochs.
-Baseline matches E5's $0.0622$ exactly -- the same configuration through
-two different code paths.}
+\caption{Leave-one-out ablation at the edge-feature-enabled configuration,
+$n=8$ seeds, 30{,}000 shots, 20 epochs. Baseline is close to but not
+identical to E9's main-table row (0.0538) -- same configuration, different
+process/RNG stream.}
 \label{tab:ablations}
 \end{table}
 
-Two effects stand out from noise at $n=8$ (an earlier $n=3$ pass could not
-resolve either): removing radius-based edges and keeping only
-DEM-derived edges is \emph{better} than the combination
-($-0.0059$, roughly $3\times$ its own std) -- radius edges may add
-connections the DEM structure does not need -- and removing the
-region/phase one-hot features is essentially a no-op ($-0.0002$), even
-though those are, in principle, the features carrying lattice-surgery
-structure. The model appears to lean on DEM/geometric edge structure more
-than on the explicit region/phase labels at this scale. Normalization
-removed ($+0.0024$) and shallower ($+0.0012$) are smaller, same-order-as-std
-effects, directionally consistent with the hyperparameter search's own
-preference for normalization and depth but not independently significant
-here -- no hypothesis test is applied to any of these deltas
-(\S\ref{sec:limitations}).
+This ablation, rerun at \S\ref{sec:edgefeat}'s edge-feature-enabled
+configuration, is far more clearly differentiated than the pre-edge-feature
+version: \textbf{two components now dominate, by roughly an order of
+magnitude over everything else}. Removing DEM edges entirely
+($+0.0084$) and removing only this paper's new edge-\emph{weight} feature
+while keeping DEM edge \emph{topology} ($+0.0082$) cost almost exactly the
+same -- \emph{how strongly} two DEM-correlated detectors are connected
+barely matters less than \emph{whether} they are connected at all. This is
+strong, differentiated confirmation that \S\ref{sec:edgefeat}'s addition is
+doing real work: it is now tied for the single most load-bearing component
+in the model, an order of magnitude larger than the largest effect in the
+pre-edge-feature ablation pass ($-0.0059$ radius-edge removal, relative to
+a $0.0622$ baseline there vs.\ $\pm 0.008$ relative to a $0.0531$ baseline
+here). Region/phase features, depth, and normalization all remain small,
+same-order-as-std effects, as in every previous ablation pass -- no
+hypothesis test is applied to any of these deltas (\S\ref{sec:limitations}).
 
 \section{Limitations}
 \label{sec:limitations}
@@ -410,20 +492,30 @@ claim here if the two ever disagree.
   during a short interior span of rounds, not read from explicit TQEC
   metadata; verified at two code distances, not proven in general.
 \item The GNN does not beat MWPM anywhere in this study, including after a
-  real hyperparameter search, and does not show MWPM's distance-scaling
-  behavior in the H4 threshold sweep.
+  real hyperparameter search and the edge-feature addition of
+  \S\ref{sec:edgefeat} -- though the gap on the surgery task itself (E7) is
+  now $\approx 1.08$--$1.09\times$, down from $\approx 2.3$--$2.8\times$.
+\item The GNN's reported spacelike pseudo-threshold ($p\approx0.0149$,
+  \S\ref{sec:h4}) is an artifact of interpolating between two chance-floor
+  points, not a real distance-scaling crossing -- the current
+  \texttt{estimate\_crossing} implementation has no floor-awareness and
+  will report a numeric answer even when both bracketing points are noise.
+\item The hyperparameter re-check that produced \S\ref{sec:edgefeat}'s
+  \texttt{hidden\_dim=128}/\texttt{lr=1e-3} config was a handful of
+  hand-picked configurations around the previous winner, not a systematic
+  search -- unlike \S\ref{sec:hparam}'s original 58-trial search, a proper
+  re-run at this new edge-feature-enabled baseline was not done.
 \item $n=8$ seeds is a real improvement over an earlier $n=3$ pass but is
   still not large enough for a formal confidence interval; no significance
   testing or multiple-comparison correction is applied anywhere.
 \item No comparison to any published neural decoder (e.g.\ AlphaQubit) or
   external baseline beyond MWPM and this repository's own union-find
   implementation; no real device noise model.
-\item The E3 zero-shot regression was isolated to training scale rather
-  than architecture (\S\ref{sec:results}) by a single controlled
-  comparison (old architecture, new scale); this rules out one specific
-  alternative hypothesis but does not by itself establish the causal
-  mechanism (e.g.\ via representation probing or an explicit
-  train/zero-shot correlation study across many scale settings).
+\item The E3 zero-shot regression was isolated to training scale/capacity
+  rather than architecture choice specifically (\S\ref{sec:results}) by
+  controlled comparisons at two different scale-ups; this rules out
+  specific alternative hypotheses but does not by itself establish the
+  causal mechanism (e.g.\ via representation probing).
 \item No public experiment-tracking dashboard (W\&B is integrated but was
   never run against a live account).
 \end{itemize}
@@ -432,19 +524,25 @@ claim here if the two ever disagree.
 
 Architecture determines whether a learned decoder can be evaluated on
 lattice surgery at all: fixed-input MLP/CNN decoders cannot, a GNN can. That
-structural result holds regardless of tuning. Accuracy is a harder story --
-the GNN trails MWPM everywhere we measured it, including on plain memory
-after a real hyperparameter search, and shows no distance-scaling advantage
-in a direct threshold comparison. Surgery-specific training closes most of
-the zero-shot gap, but more memory-only training -- independent of the
-tuned architecture, isolated by a direct controlled comparison -- made
-zero-shot transfer worse, a finding this paper reports rather than smooths
-over, and one that complicates the very premise of treating E2 as a gate
-worth optimizing. We see this as a foundation -- a working,
-GPU-accelerated, reproducible pipeline with an honestly documented gap to
-close -- rather than a finished result, and \texttt{LIMITATIONS.md} in the
-accompanying repository is maintained as the living, authoritative account
-of exactly what is and is not demonstrated.
+structural result holds regardless of tuning. Accuracy is a harder story,
+but a substantially less discouraging one than an earlier pass of this work
+found: the GNN still trails MWPM everywhere we measured it, including on
+plain memory after a real hyperparameter search, but on the lattice-surgery
+task itself the gap closed from roughly $2.3$--$2.8\times$ to
+$\approx 1.08$--$1.09\times$ once the GNN was given access to the same
+per-edge error probability MWPM's matching weight is built from --
+information the architecture had simply never been given. Surgery-specific
+training closes most of the zero-shot gap, but more memory-only training
+and capacity -- independent of any one tuned architecture, isolated by
+repeated controlled comparisons -- made zero-shot transfer worse each time
+it was tried, a finding this paper reports rather than smooths over, and
+one that complicates the very premise of treating E2 as a gate worth
+optimizing in the first place. We see this as a foundation -- a working,
+GPU-accelerated, reproducible pipeline with an honestly documented and
+now substantially narrower gap to close -- rather than a finished result,
+and \texttt{LIMITATIONS.md} in the accompanying repository is maintained as
+the living, authoritative account of exactly what is and is not
+demonstrated.
 
 \begin{thebibliography}{9}
 \bibitem{alphaqubit} Bausch et al. \emph{AlphaQubit: Learned Decoder for

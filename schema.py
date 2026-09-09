@@ -61,6 +61,20 @@ SURGERY_ONLY_SLICES: tuple[slice, ...] = (REGION_SLICE, PHASE_SLICE)
 # these staying separate all the way through training and reporting.
 OUTPUT_HEADS: tuple[str, ...] = ("spacelike", "timelike")
 
+# Edge feature vector layout (added post-hoc: the GNN originally saw only
+# graph *topology* — which detectors are connected — never the DEM's own
+# per-edge error probability, which is exactly what MWPM's matching weight
+# comes from. `dem_log_odds` is that same information (log((1-p)/p), the
+# standard matching-decoder edge weight), not a topology proxy.
+EDGE_FEATURE_NAMES: tuple[str, ...] = (
+    "dem_log_odds",  # 0 for edges with no DEM-derived weight (radius-only edges)
+    "is_dem_edge",
+    "is_radius_edge",
+    "spatial_distance",  # normalized by patch_dimension
+    "temporal_distance",  # normalized by total_rounds
+)
+NUM_EDGE_FEATURES: int = len(EDGE_FEATURE_NAMES)
+
 
 @dataclass(frozen=True, slots=True)
 class PatchConfig:

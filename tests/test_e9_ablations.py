@@ -27,7 +27,10 @@ def test_leave_one_out_variants_each_differ_from_baseline_by_exactly_one_field()
             continue
         diffs = sum(
             1
-            for field in ("mask_surgery_features", "use_dem_edges", "use_radius_edges", "num_layers", "use_norm")
+            for field in (
+                "mask_surgery_features", "use_dem_edges", "use_radius_edges", "num_layers", "use_norm",
+                "use_edge_features",
+            )
             if getattr(config, field) != getattr(BASELINE_ABLATION_CONFIG, field)
         )
         assert diffs == 1, f"{name} differs from baseline in {diffs} fields, expected exactly 1"

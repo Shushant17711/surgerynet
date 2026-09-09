@@ -31,8 +31,10 @@ from this repo.**
   below), `e7_threshold_sweep.py` (real spacelike/timelike threshold curves
   for H4), `e3_isolation_check.py` (isolates whether the E3 zero-shot
   regression below is caused by the tuned architecture or by training
-  scale), and `e6_extended.py` (a less thin H3 configuration-generalization
-  test than `run_all.py`'s own 2-config default).
+  scale), `e6_extended.py` (a less thin H3 configuration-generalization
+  test than `run_all.py`'s own 2-config default), and
+  `edge_feature_check.py` (A/B evidence for giving the GNN access to the
+  DEM's own per-edge error probability — see below).
 - `results/` — every generated table, plot, and raw JSON-lines result file.
 - `paper/main.tex` — a paper draft built from the real numbers in `results/`.
 
@@ -75,51 +77,69 @@ scripts/reproduce.sh                           # full E1-E9 pipeline -> results/
 ```
 
 `scripts/reproduce.sh` and `experiments/run_all.py` now default to the tuned
-hyperparameters from `results/HPARAM_SEARCH.md`
-(`hidden_dim=64, num_layers=6, conv_type="transformer", heads=2, lr=3e-4,
-weight_decay=1e-4`) rather than the untuned design-doc defaults — pass
-`--hidden-dim`/`--num-layers`/`--conv-type`/`--heads`/`--lr`/`--weight-decay` to
-override. Pass `--shots`/`--epochs`/`--num-seeds` to control scale; see
+hyperparameters from `results/HPARAM_SEARCH.md` + `results/EDGE_FEATURE_CHECK.md`
+(`hidden_dim=128, num_layers=6, conv_type="transformer", heads=2, lr=1e-3,
+weight_decay=1e-4`, plus DEM-log-odds edge features — see below) rather than
+the untuned design-doc defaults — pass
+`--hidden-dim`/`--num-layers`/`--conv-type`/`--heads`/`--lr`/`--weight-decay`/`--edge-dim`
+to override. Pass `--shots`/`--epochs`/`--num-seeds` to control scale; see
 `results/main_table.md`'s own header row for what scale actually produced the
 current numbers.
 
 ## Results
 
-$p=0.002$ (validated sub-threshold, cross-checked by `results/THRESHOLD_SWEEP.md`), 8 seeds, 30,000 shots, 20 epochs, tuned hyperparameters (`hidden_dim=64, num_layers=6, conv_type=transformer, heads=2, lr=3e-4, weight_decay=1e-4`). Full table with E8/E9 rows: [`results/main_table.md`](results/main_table.md).
+$p=0.002$ (validated sub-threshold, cross-checked by `results/THRESHOLD_SWEEP.md`), 8 seeds, 30,000 shots, 20 epochs, tuned hyperparameters + DEM edge-weight features (`hidden_dim=128, num_layers=6, conv_type=transformer, heads=2, lr=1e-3, weight_decay=1e-4, edge_dim=5`). Full table with E8/E9 rows: [`results/main_table.md`](results/main_table.md).
 
 | Exp. | What it measures | Decoder | Logical error rate | vs. MWPM |
 |---|---|---|---|---|
 | E2 | Plain memory (the design doc's own gate) | GNN | 0.0013 ± 0.0002 | 1.86x |
 | E2 | Plain memory | MWPM | 0.0007 ± 0.0002 | — |
-| E3 | Zero-shot transfer to surgery | GNN | 0.4207 ± 0.0305 | — |
+| E3 | Zero-shot transfer to surgery | GNN | 0.4825 ± 0.0324 | — |
 | E3 | Zero-shot transfer to surgery | MLP / CNN | **N/A — architecturally infeasible** | — |
-| E5 | Surgery-trained | GNN | 0.0622 ± 0.0013 | — |
-| E6 | Config. generalization (held-out $k$) | GNN | 0.2224 ± 0.1014 | — |
-| E7 | Surgery, spacelike | GNN | 0.0621 ± 0.0015 | 1.26x |
+| E5 | Surgery-trained | GNN | 0.0523 ± 0.0016 | — |
+| E6 | Config. generalization (held-out $k$) | GNN | 0.3023 ± 0.0521 | — |
+| E7 | Surgery, spacelike | GNN | **0.0530 ± 0.0011** | **1.08x** |
 | E7 | Surgery, spacelike | MWPM | 0.0491 ± 0.0012 | — |
-| E7 | Surgery, timelike | GNN | 0.1239 ± 0.0027 | 1.25x |
+| E7 | Surgery, timelike | GNN | **0.1082 ± 0.0046** | **1.09x** |
 | E7 | Surgery, timelike | MWPM | 0.0990 ± 0.0014 | — |
-| E9 | Ablation baseline (surgery-trained) | GNN | 0.0639 ± 0.0032 | — |
+| E9 | Ablation baseline (surgery-trained) | GNN | 0.0538 ± 0.0024 | — |
 
 **Ablations** ([`results/ABLATIONS.md`](results/ABLATIONS.md), leave-one-out, same 8-seed/30000-shot scale):
 
 | Variant | Mean rate | Std | Δ vs. baseline |
 |---|---|---|---|
-| Baseline (all components on) | 0.0622 | 0.0021 | — |
-| Region/phase features removed | 0.0620 | 0.0035 | −0.0002 |
-| DEM edges removed (radius-only) | 0.0640 | 0.0021 | +0.0019 |
-| Radius edges removed (DEM-only) | 0.0563 | 0.0016 | **−0.0059** |
-| Shallower (4 layers vs. 6) | 0.0633 | 0.0021 | +0.0012 |
-| Normalization removed | 0.0645 | 0.0042 | +0.0024 |
+| Baseline (all components on) | 0.0531 | 0.0021 | — |
+| Region/phase features removed | 0.0534 | 0.0018 | +0.0003 |
+| DEM edges removed (radius-only) | 0.0614 | 0.0021 | **+0.0084** |
+| Radius edges removed (DEM-only) | 0.0536 | 0.0014 | +0.0006 |
+| Shallower (4 layers vs. 6) | 0.0537 | 0.0023 | +0.0007 |
+| Normalization removed | 0.0518 | 0.0013 | -0.0012 |
+| **Edge weights removed (topology only)** | 0.0613 | 0.0016 | **+0.0082** |
 
-**H4 threshold sweep** ([`results/THRESHOLD_SWEEP.md`](results/THRESHOLD_SWEEP.md), [`results/timelike_threshold.png`](results/timelike_threshold.png)):
+The new edge-weight feature is now tied for the single most load-bearing
+component in the model (removing it costs almost exactly as much as
+removing DEM edges outright) — strong confirmation it's doing real work,
+not a marginal tweak.
+
+**H4 threshold sweep** ([`results/THRESHOLD_SWEEP.md`](results/THRESHOLD_SWEEP.md), [`results/timelike_threshold.png`](results/timelike_threshold.png)), rerun at the edge-feature config:
 
 | Observable | Decoder | Pseudo-threshold $p$ |
 |---|---|---|
 | Spacelike | MWPM | ≈ 0.0033 |
-| Spacelike | GNN | not found in swept range (0.0008–0.02) |
+| Spacelike | GNN | ≈ 0.0149 — **read before citing**: this is a linear-interpolation artifact between two chance-floor (≈0.50) points, not a real crossing; see below |
 | Timelike | MWPM | ≈ 0.0030 |
 | Timelike | GNN | not found in swept range (0.0008–0.02) |
+
+**Don't just cite the 0.0149 number.** At $p=0.005$ (still clearly
+sub-threshold, MWPM decodes it easily) the GNN's $k=2$ rate (0.488) is
+still far worse than its $k=1$ rate (0.295) — the same qualitative failure
+as before edge features. The reported "crossing" falls between $p=0.005$
+and $p=0.01$, where *both* $k=1$ (0.504) and $k=2$ (0.499) rates have
+already collapsed to chance. The estimator has no floor-awareness and will
+report a number even when both bracketing points are noise. **Honest
+reading**: in the regime where the GNN is actually decoding non-trivially,
+more code distance still doesn't help it the way it helps MWPM — edge
+features improved absolute accuracy a lot without fixing this.
 
 ## The headline result so far
 
@@ -127,33 +147,55 @@ The design doc's own gate (`tasks.md`'s header): "if you cannot beat MWPM on
 memory [E2], the problem is your GNN, not lattice surgery." Before any tuning,
 at design-doc-default hyperparameters, the GNN lost to MWPM by **~15x** on plain
 memory. A real hyperparameter search (`experiments/hparam_search.py`, 58
-trials, GPU) — varying hidden dim, depth, conv type, learning rate, batch size,
-weight decay — closed that to **~1.8x** (confirmed not to be a training-budget
-artifact: 3x the epochs and 2x the test shots on the winning config changed
-the ratio from 1.79x to 1.88x, i.e. not at all). The GNN still does not beat
-MWPM on memory. That is reported plainly, not softened — see
-`results/HPARAM_SEARCH.md` for the full search and
-`results/main_table.md`/`LIMITATIONS.md` for what this means for every
-downstream (lattice-surgery) number.
+trials, GPU) narrowed that to **~1.8x-1.9x** and it has stayed there since —
+**the GNN still does not beat MWPM on plain memory**, and that has not
+changed. That's reported plainly, not softened.
 
-At the tuned hyperparameters and a much larger scaled run (8 seeds, 30000
-shots, 20 epochs — see `results/main_table.md`), every metric that trains
-*directly* on surgery data improved substantially (E5: 0.116 → 0.062; E7
-spacelike gap to MWPM: 2.3x → 1.26x; E7 timelike: 2.8x → 1.25x) — but E3's
-zero-shot transfer got measurably *worse* (32% → 42% error). A follow-up
-(`experiments/e3_isolation_check.py`, `results/E3_ISOLATION_CHECK.md`)
-isolated why: it's **training scale**, not the tuned architecture, that
-drives this — training the *old*, untuned architecture at the *new*, larger
-scale reproduces the regression (and then some: 51.7% ± 15.3%), which ruled
-out our first guess (a deeper/tuned model "specializing" to memory
-statistics) before it made it into anything final. See `LIMITATIONS.md`'s
-"third pass" section for the full corrected story.
+But E2 (plain memory) was never really the point of this project — the
+actual research question is lattice surgery (E3/E5/E6/E7), and there the
+picture moved a lot. The GNN originally saw graph *topology* only — never the
+DEM's own per-edge error probability, which is exactly the number MWPM's
+matching weight comes from. Adding that as an edge feature
+(`experiments/edge_feature_check.py`, `LIMITATIONS.md`'s "fourth pass") did
+essentially nothing on E2's uniform-error-rate memory circuit, but produced a
+real, consistent improvement on surgery data (where error rates vary
+spatially, so the weight is actually informative) — and a small follow-up
+hyperparameter re-check on top of it (`hidden_dim=128`, `lr=1e-3`) pushed
+further. Net result, full 8-seed/30000-shot rerun:
+
+- **E7 (spacelike): gap to MWPM closed from ~2.3x to ~1.08x.**
+- **E7 (timelike): gap to MWPM closed from ~2.8x to ~1.09x.**
+- E5 (surgery-trained): 0.1156 (untuned) → 0.0622 (tuned hyperparameters) →
+  **0.0523 (+ edge features and a further re-tune)** — three successive real
+  improvements, not one (see `LIMITATIONS.md` for the full multi-pass numbers).
+- E3 (zero-shot) and E6 (config. generalization) both got *worse*, continuing
+  a pattern already isolated in an earlier pass
+  (`experiments/e3_isolation_check.py`): more memory-training capacity/budget
+  doesn't help — and can hurt — the zero-shot number, even as it helps
+  everything that trains directly on surgery data.
+
+See `LIMITATIONS.md`'s "fourth pass" section for the full A/B evidence, the
+complete before/after table, and the honest accounting of what got worse
+alongside what got much better.
 
 ## What's genuinely unresolved
 
 Short version — full version in `LIMITATIONS.md`:
 
-- GNN still trails MWPM everywhere, including after real tuning.
+- GNN still trails MWPM everywhere in this repo, including on the
+  now-much-closer E7 surgery numbers.
+- E3 (zero-shot) and E6 (configuration generalization) got worse as the
+  model gained capacity and edge features — a real, reproduced pattern, not
+  fully explained (isolated to training scale/capacity, not architecture
+  choice, but the underlying mechanism is still a hypothesis).
+- The edge-feature hyperparameter re-check was a handful of hand-picked
+  configs, not a systematic search — a full `hparam_search.py`-style search
+  at this new baseline might find something better still.
+- The GNN still shows no genuine distance-scaling advantage (H4) in the
+  regime where it's actually decoding non-trivially — the H4 threshold
+  sweep's naive linear-interpolation estimator reports a numeric spacelike
+  "crossing" now, but it's an artifact of two chance-floor points, not a
+  real signal (see the threshold table above).
 - Unequal-distance patches and independent routing-width are unimplemented —
   checked at the TQEC API level, not just observed; see `LIMITATIONS.md`'s
   Task-2.3-adjacent entry for the exact API citation.

@@ -34,6 +34,7 @@ from circuits.lattice_surgery import load_generated_circuit
 from data.generate import sample_shots
 from data.to_graph import GraphBuildContext, batch_to_graphs
 from experiments.common import ExperimentResult, append_result, evaluate_gnn, generate_surgery_circuit, train_gnn
+from schema import NUM_EDGE_FEATURES
 
 
 def mwpm_sweep(
@@ -76,6 +77,7 @@ def gnn_sweep(
     weight_decay: float,
     device: str | None,
     batch_size: int = 64,
+    edge_dim: int | None = NUM_EDGE_FEATURES,
 ) -> list[ExperimentResult]:
     """`batch_size` defaults lower than `train_gnn`'s own default (128) —
     surgery graphs at k=2 (d=5, more rounds, more detectors) are
@@ -99,7 +101,7 @@ def gnn_sweep(
                 model = train_gnn(
                     train_graphs, hidden_dim=hidden_dim, num_layers=num_layers, conv_type=conv_type, heads=heads,
                     lr=lr, weight_decay=weight_decay, epochs=epochs, seed=seed, device=device,
-                    batch_size=batch_size,
+                    batch_size=batch_size, edge_dim=edge_dim,
                 )
 
                 test_batch = sample_shots(circuit, shots=test_shots, seed=seed + 1, warn_near_chance=False)
@@ -206,11 +208,11 @@ def _cli() -> None:
                               "Note training-time OOM was never actually the failure mode (evaluate_gnn's un-chunked "
                               "eval batch was) — going much lower than this just makes training slower for no safety benefit.")
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--hidden-dim", type=int, default=64, help="tuned default — see results/HPARAM_SEARCH.md")
+    parser.add_argument("--hidden-dim", type=int, default=128, help="tuned default — see results/HPARAM_SEARCH.md")
     parser.add_argument("--num-layers", type=int, default=6)
     parser.add_argument("--conv-type", default="transformer")
     parser.add_argument("--heads", type=int, default=2)
-    parser.add_argument("--lr", type=float, default=3e-4)
+    parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--device", default=None)
     parser.add_argument("--results-path", default="results/e7_threshold_sweep.jsonl")

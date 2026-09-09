@@ -16,10 +16,11 @@
 # CLI defaults are deliberately smoke-test-sized, matching this project's
 # test suite -- running this script with NO extra args runs that small,
 # fast smoke-test scale, not the scale below). experiments/run_all.py also
-# now defaults to the *tuned* hyperparameters from a real search
-# (results/HPARAM_SEARCH.md: hidden_dim=64, num_layers=6,
-# conv_type=transformer, heads=2, lr=3e-4, weight_decay=1e-4), which GPU
-# support made practical to search for at all -- see LIMITATIONS.md.
+# now defaults to the *tuned* hyperparameters from a real search plus a
+# DEM-edge-weight feature addition (results/HPARAM_SEARCH.md +
+# results/EDGE_FEATURE_CHECK.md: hidden_dim=128, num_layers=6,
+# conv_type=transformer, heads=2, lr=1e-3, weight_decay=1e-4, edge_dim=5),
+# which GPU support made practical to search for at all -- see LIMITATIONS.md.
 #
 # The results/main_table.md and results/ABLATIONS.md actually checked
 # into this repo were produced with:
@@ -113,11 +114,12 @@ echo "=== [ablations] Leave-one-out ablation study ==="
 # anything regardless of training budget. See LIMITATIONS.md.
 # train/test-shots=30000, epochs=20, num-seeds=8 (not 3000/8/3): the scale
 # used for the results/ files currently checked into this repo, run on an
-# RTX 4060 after experiments/hparam_search.py tuned the hyperparameters
-# below (results/HPARAM_SEARCH.md) -- GPU support made this scale-up
+# RTX 4060 after experiments/hparam_search.py + experiments/edge_feature_check.py
+# tuned the hyperparameters below (results/HPARAM_SEARCH.md,
+# results/EDGE_FEATURE_CHECK.md) -- GPU support made this scale-up
 # practical where it wasn't on CPU. Smaller values still work for a quick
 # local check; they just produce noisier per-variant estimates.
 "$VENV_PYTHON" -m experiments.run_ablations \
   --k 1 --p 0.002 --train-shots 30000 --test-shots 30000 --epochs 20 --num-seeds 8 \
-  --hidden-dim 64 --conv-type transformer --heads 2 --lr 3e-4 --weight-decay 1e-4 \
+  --hidden-dim 128 --conv-type transformer --heads 2 --lr 1e-3 --weight-decay 1e-4 \
   --results-path results/e9_ablations_loo.jsonl --report-path results/ABLATIONS.md

@@ -21,6 +21,7 @@ from data.generate import sample_shots
 from data.to_graph import GraphBuildContext, batch_to_graphs
 from experiments.common import ExperimentResult, append_result, evaluate_gnn, train_gnn
 from models.gnn_decoder import GNNDecoder
+from schema import NUM_EDGE_FEATURES
 
 
 def run(
@@ -31,14 +32,15 @@ def run(
     epochs: int = 3,
     batch_size: int = 128,
     seed: int = 0,
-    hidden_dim: int = 64,
+    hidden_dim: int = 128,
     num_layers: int = 6,
     conv_type: str = "transformer",
     heads: int = 2,
     use_norm: bool = True,
-    lr: float = 3e-4,
+    lr: float = 1e-3,
     weight_decay: float = 1e-4,
     device: str | None = None,
+    edge_dim: int | None = NUM_EDGE_FEATURES,
 ) -> tuple[ExperimentResult, ExperimentResult, GNNDecoder]:
     circuit = stim.Circuit.generated(
         "surface_code:rotated_memory_z", distance=distance, rounds=distance, after_clifford_depolarization=p
@@ -52,6 +54,7 @@ def run(
         train_graphs,
         hidden_dim=hidden_dim, num_layers=num_layers, conv_type=conv_type, heads=heads, use_norm=use_norm,
         lr=lr, weight_decay=weight_decay, epochs=epochs, batch_size=batch_size, seed=seed, device=device,
+        edge_dim=edge_dim,
     )
 
     test_batch = sample_shots(circuit, shots=test_shots, seed=seed + 1)

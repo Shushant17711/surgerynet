@@ -25,10 +25,10 @@ def run(
     epochs: int = 2,
     num_seeds: int = 3,
     results_path: str = "results/e9_ablations_loo.jsonl",
-    hidden_dim: int = 64,
+    hidden_dim: int = 128,
     conv_type: str = "transformer",
     heads: int = 2,
-    lr: float = 3e-4,
+    lr: float = 1e-3,
     weight_decay: float = 1e-4,
     device: str | None = None,
 ) -> list[ExperimentResult]:
@@ -90,10 +90,10 @@ def _cli() -> None:
     parser.add_argument("--num-seeds", type=int, default=3)
     parser.add_argument("--results-path", default="results/e9_ablations_loo.jsonl")
     parser.add_argument("--report-path", default="results/ABLATIONS.md")
-    parser.add_argument("--hidden-dim", type=int, default=64)
+    parser.add_argument("--hidden-dim", type=int, default=128)
     parser.add_argument("--conv-type", default="transformer")
     parser.add_argument("--heads", type=int, default=2)
-    parser.add_argument("--lr", type=float, default=3e-4)
+    parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--device", default=None)
     args = parser.parse_args()

@@ -7,6 +7,6 @@ beating the k=1 (d=3) curve (linear interpolation between bracketing swept p val
 | observable_kind | decoder | pseudo-threshold p |
 |---|---|---|
 | spacelike | mwpm | 0.00334 |
-| spacelike | gnn | not found in swept range |
+| spacelike | gnn | 0.01489 |
 | timelike | mwpm | 0.00304 |
 | timelike | gnn | not found in swept range |

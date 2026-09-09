@@ -7,6 +7,14 @@ global pooling only emits a row for batch indices actually present in
 `batch.batch`, so an empty graph's row would otherwise be dropped and
 misalign predictions against `y`. Passing `size=batch.num_graphs`
 (verified empirically, see the pooling call below) fixes this.
+
+**Edge features (post-hoc addition).** `edge_dim`, when set, wires each
+conv layer up to accept `batch.edge_attr` — in particular the DEM-derived
+log-odds weight `data/to_graph.py` now attaches to every edge, which is
+literally the number MWPM's own matching weight comes from. Both `GATConv`
+and `TransformerConv` support `edge_dim` natively. Left `None` by default
+so old call sites/tests building edge-attr-free synthetic graphs are
+unaffected — real experiment scripts pass `schema.NUM_EDGE_FEATURES`.
 """
 
 from __future__ import annotations
@@ -30,6 +38,7 @@ class GNNDecoder(nn.Module):
         conv_type: str = "gat",
         heads: int = 4,
         use_norm: bool = True,
+        edge_dim: int | None = None,
     ) -> None:
         super().__init__()
         if not 4 <= num_layers <= 6:
@@ -39,9 +48,10 @@ class GNNDecoder(nn.Module):
         ConvCls = _CONV_TYPES[conv_type]
 
         self.use_norm = use_norm
+        self.edge_dim = edge_dim
         self.input_proj = nn.Linear(in_channels, hidden_dim)
         self.convs = nn.ModuleList(
-            ConvCls(hidden_dim, hidden_dim // heads, heads=heads, concat=True)
+            ConvCls(hidden_dim, hidden_dim // heads, heads=heads, concat=True, edge_dim=edge_dim)
             for _ in range(num_layers)
         )
         self.norms = nn.ModuleList(
@@ -56,8 +66,9 @@ class GNNDecoder(nn.Module):
 
     def forward(self, batch: Batch) -> dict[str, torch.Tensor]:
         x = self.input_proj(batch.x)
+        edge_attr = batch.edge_attr if self.edge_dim is not None else None
         for conv, norm in zip(self.convs, self.norms):
-            x = norm(conv(x, batch.edge_index) + x).relu()
+            x = norm(conv(x, batch.edge_index, edge_attr=edge_attr) + x).relu()
 
         mean_pool = global_mean_pool(x, batch.batch, size=batch.num_graphs)
         max_pool = global_max_pool(x, batch.batch, size=batch.num_graphs)

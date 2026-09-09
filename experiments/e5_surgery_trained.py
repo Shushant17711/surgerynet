@@ -13,6 +13,7 @@ from data.generate import sample_shots
 from data.to_graph import GraphBuildContext, batch_to_graphs
 from experiments.common import ExperimentResult, evaluate_gnn, train_gnn
 from models.gnn_decoder import GNNDecoder
+from schema import NUM_EDGE_FEATURES
 
 
 def run(
@@ -26,14 +27,15 @@ def run(
     seed: int = 0,
     p: float | None = None,
     k: int | None = None,
-    hidden_dim: int = 64,
+    hidden_dim: int = 128,
     num_layers: int = 6,
     conv_type: str = "transformer",
     heads: int = 2,
     use_norm: bool = True,
-    lr: float = 3e-4,
+    lr: float = 1e-3,
     weight_decay: float = 1e-4,
     device: str | None = None,
+    edge_dim: int | None = NUM_EDGE_FEATURES,
 ) -> tuple[ExperimentResult, GNNDecoder]:
     """`p`/`k` are recorded on the result but not used to build the
     circuit — record the same (k, p) the caller generated
@@ -49,6 +51,7 @@ def run(
         train_graphs,
         hidden_dim=hidden_dim, num_layers=num_layers, conv_type=conv_type, heads=heads, use_norm=use_norm,
         lr=lr, weight_decay=weight_decay, epochs=epochs, batch_size=batch_size, seed=seed, device=device,
+        edge_dim=edge_dim,
     )
 
     test_batch = sample_shots(circuit, shots=test_shots, seed=seed + 1)

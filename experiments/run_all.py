@@ -34,6 +34,7 @@ from experiments.e7_timelike import run as run_e7
 from experiments.e8_latency import run_latency_sweep
 from experiments.e9_ablations import ablation_grid, run_one
 from experiments.report import write_main_table
+from schema import NUM_EDGE_FEATURES
 
 
 def main() -> None:
@@ -46,13 +47,15 @@ def main() -> None:
     parser.add_argument("--num-seeds", type=int, default=3, help="seeds per stochastic stage; <3 is flagged in the report")
     parser.add_argument("--results-dir", default="results")
     parser.add_argument("--full-ablation-grid", action="store_true", help="run every E9 variant, not just one")
-    parser.add_argument("--hidden-dim", type=int, default=64, help="tuned default — see results/HPARAM_SEARCH.md")
+    parser.add_argument("--hidden-dim", type=int, default=128, help="tuned default — see results/HPARAM_SEARCH.md")
     parser.add_argument("--num-layers", type=int, default=6)
     parser.add_argument("--conv-type", default="transformer")
     parser.add_argument("--heads", type=int, default=2)
-    parser.add_argument("--lr", type=float, default=3e-4)
+    parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--device", default=None, help="cuda/cpu; default auto-detects")
+    parser.add_argument("--edge-dim", type=int, default=NUM_EDGE_FEATURES,
+                         help="DEM-log-odds edge features (results/LIMITATIONS.md's 'edge weight' addition); 0 disables")
     args = parser.parse_args()
 
     results_dir = args.results_dir
@@ -60,6 +63,7 @@ def main() -> None:
     hp = dict(
         hidden_dim=args.hidden_dim, num_layers=args.num_layers, conv_type=args.conv_type, heads=args.heads,
         lr=args.lr, weight_decay=args.weight_decay, device=args.device,
+        edge_dim=(args.edge_dim if args.edge_dim > 0 else None),
     )
 
     surgery_path = f"{results_dir}/_k{args.k}_spacelike.stim"
@@ -120,7 +124,10 @@ def main() -> None:
 
         print(f"[E9] ablations (seed={seed})")
         grid = ablation_grid() if args.full_ablation_grid else ablation_grid()[:1]
-        e9_hp = {k: v for k, v in hp.items() if k != "num_layers"}
+        # num_layers/edge_dim come from the ablation config itself (config.num_layers,
+        # config.use_edge_features), not a loose passthrough — run_one has no top-level
+        # edge_dim param, so leaving it in here would TypeError.
+        e9_hp = {key: v for key, v in hp.items() if key not in ("num_layers", "edge_dim")}
         for config in grid:
             r = run_one(
                 config, k=args.k, p=args.p, train_shots=args.shots, test_shots=args.shots, epochs=args.epochs,
