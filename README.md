@@ -83,6 +83,44 @@ override. Pass `--shots`/`--epochs`/`--num-seeds` to control scale; see
 `results/main_table.md`'s own header row for what scale actually produced the
 current numbers.
 
+## Results
+
+$p=0.002$ (validated sub-threshold, cross-checked by `results/THRESHOLD_SWEEP.md`), 8 seeds, 30,000 shots, 20 epochs, tuned hyperparameters (`hidden_dim=64, num_layers=6, conv_type=transformer, heads=2, lr=3e-4, weight_decay=1e-4`). Full table with E8/E9 rows: [`results/main_table.md`](results/main_table.md).
+
+| Exp. | What it measures | Decoder | Logical error rate | vs. MWPM |
+|---|---|---|---|---|
+| E2 | Plain memory (the design doc's own gate) | GNN | 0.0013 ± 0.0002 | 1.86x |
+| E2 | Plain memory | MWPM | 0.0007 ± 0.0002 | — |
+| E3 | Zero-shot transfer to surgery | GNN | 0.4207 ± 0.0305 | — |
+| E3 | Zero-shot transfer to surgery | MLP / CNN | **N/A — architecturally infeasible** | — |
+| E5 | Surgery-trained | GNN | 0.0622 ± 0.0013 | — |
+| E6 | Config. generalization (held-out $k$) | GNN | 0.2224 ± 0.1014 | — |
+| E7 | Surgery, spacelike | GNN | 0.0621 ± 0.0015 | 1.26x |
+| E7 | Surgery, spacelike | MWPM | 0.0491 ± 0.0012 | — |
+| E7 | Surgery, timelike | GNN | 0.1239 ± 0.0027 | 1.25x |
+| E7 | Surgery, timelike | MWPM | 0.0990 ± 0.0014 | — |
+| E9 | Ablation baseline (surgery-trained) | GNN | 0.0639 ± 0.0032 | — |
+
+**Ablations** ([`results/ABLATIONS.md`](results/ABLATIONS.md), leave-one-out, same 8-seed/30000-shot scale):
+
+| Variant | Mean rate | Std | Δ vs. baseline |
+|---|---|---|---|
+| Baseline (all components on) | 0.0622 | 0.0021 | — |
+| Region/phase features removed | 0.0620 | 0.0035 | −0.0002 |
+| DEM edges removed (radius-only) | 0.0640 | 0.0021 | +0.0019 |
+| Radius edges removed (DEM-only) | 0.0563 | 0.0016 | **−0.0059** |
+| Shallower (4 layers vs. 6) | 0.0633 | 0.0021 | +0.0012 |
+| Normalization removed | 0.0645 | 0.0042 | +0.0024 |
+
+**H4 threshold sweep** ([`results/THRESHOLD_SWEEP.md`](results/THRESHOLD_SWEEP.md), [`results/timelike_threshold.png`](results/timelike_threshold.png)):
+
+| Observable | Decoder | Pseudo-threshold $p$ |
+|---|---|---|
+| Spacelike | MWPM | ≈ 0.0033 |
+| Spacelike | GNN | not found in swept range (0.0008–0.02) |
+| Timelike | MWPM | ≈ 0.0030 |
+| Timelike | GNN | not found in swept range (0.0008–0.02) |
+
 ## The headline result so far
 
 The design doc's own gate (`tasks.md`'s header): "if you cannot beat MWPM on
