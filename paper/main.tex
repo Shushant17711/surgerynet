@@ -411,6 +411,28 @@ floor term) would be needed before trusting a single reported
 pseudo-threshold number for the GNN without inspecting the raw curve, as
 done here.
 
+\textbf{Is the flat $k=2$ curve a training-instability artifact rather than
+a real finding?} A separate investigation (training the H3 configuration
+model on $k=2$/$k=3$ data with no $k=1$ data mixed in) found a real
+optimization problem at \texttt{lr=1e-3} on larger surgery graphs --
+near-chance training-set performance, roughly halved by dropping to
+\texttt{lr=3e-4}. Since this section's $k=2$ curve also trains at
+\texttt{lr=1e-3}, we rechecked directly: reran the $k=2$ spacelike curve at
+\texttt{lr=3e-4}, first at this sweep's own budget, then at a much larger
+one matching where the H3 fix actually helped. \textbf{Neither changed the
+curve.} Checking against MWPM's own numbers at the same points clarifies
+why this comparison still means something: at $p=0.01$/$0.02$, MWPM itself
+is already at chance, so the GNN failing there was never real evidence
+either way; but at $p=0.0025$ and $p=0.005$, MWPM clearly decodes
+non-trivially ($5.7\%$ and $26.8\%$ error) while the GNN sits at chance
+across all three configurations tested. This is a genuine, specific
+difficulty that survived two real optimization fixes -- not simply a
+hyperparameter artifact, though not exhaustively ruled out either (an even
+lower learning rate with a longer epoch budget, or a correctness check of
+the $k=2$ data pipeline specifically, were not tried). Full numbers:
+\texttt{results/LR\_INSTABILITY\_DIAGNOSTIC.md},
+\texttt{results/CRITIQUE\_FOLLOWUP.md}.
+
 \begin{figure}[h]
 \centering
 \includegraphics[width=0.95\textwidth]{timelike_threshold.png}
@@ -504,7 +526,16 @@ claim here if the two ever disagree.
   \texttt{hidden\_dim=128}/\texttt{lr=1e-3} config was a handful of
   hand-picked configurations around the previous winner, not a systematic
   search -- unlike \S\ref{sec:hparam}'s original 58-trial search, a proper
-  re-run at this new edge-feature-enabled baseline was not done.
+  re-run at this new edge-feature-enabled baseline was not done. That
+  search was also validated only on $k=1$ data: \texttt{lr=1e-3} causes a
+  real, only partially-fixable training degradation on $k=2$/$k=3$
+  configurations (\S\ref{sec:h4}), so the tuned defaults used throughout
+  this paper are not necessarily well-suited beyond $k=1$.
+\item E6's held-out generalization number is dominated by \emph{which}
+  configuration a given seed's random split happens to exclude, not by
+  training quality -- a genuine fix to the $k{\geq}2$ training difficulty
+  above would still not make the current pooled E6 metric meaningful;
+  reporting per-excluded-configuration results was not implemented.
 \item $n=8$ seeds is a real improvement over an earlier $n=3$ pass but is
   still not large enough for a formal confidence interval; no significance
   testing or multiple-comparison correction is applied anywhere.

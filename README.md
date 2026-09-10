@@ -141,6 +141,21 @@ reading**: in the regime where the GNN is actually decoding non-trivially,
 more code distance still doesn't help it the way it helps MWPM — edge
 features improved absolute accuracy a lot without fixing this.
 
+**Follow-up: is this a training bug, not a real finding?** Checked directly
+— see `results/LR_INSTABILITY_DIAGNOSTIC.md` and `results/CRITIQUE_FOLLOWUP.md`.
+A real optimization problem was found (training on k≥2 data alone degrades
+badly at the current tuned `lr=1e-3`, partially fixed by `lr=3e-4`), so the
+k=2 curve here was rechecked at the lower lr — twice, at two different
+shot/epoch budgets. **Neither fixed it.** Cross-checking against MWPM's own
+numbers: at p=0.01/0.02 MWPM itself is already at chance, so the GNN
+failing there was never real evidence; but at **p=0.0025 and p=0.005,
+MWPM clearly decodes non-trivially (5.7%, 26.8% error) while the GNN sits
+at chance across all three configurations tested.** This survived two real
+fix attempts — the current read is that this is a genuine, specific k=2
+learning difficulty, not simply a hyperparameter artifact, though not
+exhaustively investigated (an even lower lr with more epochs, or a
+from-scratch check of the k=2 data pipeline, weren't tried).
+
 ## The headline result so far
 
 The design doc's own gate (`tasks.md`'s header): "if you cannot beat MWPM on

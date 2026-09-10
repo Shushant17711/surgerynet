@@ -267,6 +267,35 @@ points confirmed non-trivial, or a proper logistic fit with a floor term)
 would be needed to make this metric robust against near-chance points
 before trusting any single reported "pseudo-threshold" number for the GNN
 without inspecting the raw curve, as done here.
+
+**A fifth pass rechecked whether this is a training-instability artifact
+rather than a real finding — it mostly isn't.** A separate investigation
+(training E6's config-randomization model on k=2/k=3 surgery data alone,
+without any k=1 data mixed in) found a real training degradation at
+`lr=1e-3` (the tuned default from the fourth pass) — near-chance train-set
+performance, fixed roughly halfway by dropping to `lr=3e-4`. Since the H4
+threshold sweep also trains fresh models at k=2 with `lr=1e-3`, this raised
+a real question: is the flat k=2 GNN curve above just the same bug, not a
+genuine capability gap? Rechecked directly: reran the k=2 spacelike curve at
+`lr=3e-4`, first at the sweep's own budget (8000 shots/15 epochs), then at
+a much larger budget (15000 shots/20 epochs, matching where the E6 fix
+actually worked). **Neither fixed it** — the curve was essentially
+unchanged both times. Checking against MWPM's own numbers at the same
+points clarifies why this comparison is still meaningful: at `p=0.01`/`0.02`,
+MWPM itself is already at chance (0.49-0.50) — the problem is too hard for
+any decoder there, so the GNN failing too was never real evidence. But at
+`p=0.0025` and `p=0.005`, MWPM clearly does non-trivial decoding (5.7% and
+26.8% error) while the GNN sits at chance (~49-50%) across three different
+configurations tested (the original `lr=1e-3`; `lr=3e-4` at the sweep's
+small budget; `lr=3e-4` at a large budget). **This is now the most
+defensible read of H4**: a genuine, specific difficulty learning k=2
+spacelike decoding in a regime that is provably still solvable, which
+survived two real attempts at an optimization fix — not simply a
+hyperparameter artifact, though not exhaustively investigated either (an
+even lower lr with more epochs, or a from-scratch correctness check of the
+k=2 data pipeline specifically, were not tried). Full numbers and the
+E6/H4 investigation history: `results/LR_INSTABILITY_DIAGNOSTIC.md`,
+`results/CRITIQUE_FOLLOWUP.md`.
 - **The union-find baseline (`baselines/union_find.py`) uses two
   documented simplifications**: whole-edge growth per round instead of
   scheduled half-edges (slightly suboptimal but still a valid decoder —

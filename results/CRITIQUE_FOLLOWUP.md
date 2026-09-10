@@ -88,14 +88,43 @@ the threshold sweep's own (smaller) budget — 8000 train shots, 15 epochs:
 
 **Essentially unchanged.** Lowering lr alone, at the threshold sweep's own
 smaller shot/epoch budget, did NOT fix the "jumps to chance at p=0.0025 and
-stays flat" pattern. This means the E6 fix doesn't directly transfer here —
-the threshold sweep's specific budget (8000 shots/15 epochs, deliberately
-kept cheap since it trains 20 separate models per full sweep) may simply be
-insufficient for k=2 regardless of lr. A follow-up test at the *larger*,
-E6-matching budget (15000 shots/20 epochs) + lr=3e-4 was launched to
-disambiguate "is it budget, or is it something else entirely" — see below /
-whatever this file says was appended after this point, or `main.tex`/
-`LIMITATIONS.md` if that recheck was completed and folded in.
+stays flat" pattern.
+
+**Disambiguating follow-up**: reran k=2 spacelike at the *larger*, E6-matching
+budget (15000 train/test shots, 20 epochs) + lr=3e-4 -- the same combination
+that gave E6 its real (if partial) improvement:
+
+| p | rate | for reference: MWPM at same (k=2, p) |
+|---|---|---|
+| 0.0012 | 0.0565 | 0.0068 |
+| 0.0025 | 0.4875 | 0.0569 |
+| 0.005  | 0.5011 | 0.2679 |
+| 0.01   | 0.4995 | 0.4919 |
+| 0.02   | 0.4987 | 0.4968 |
+
+**Still essentially unchanged.** Neither lr nor shot/epoch budget, alone or
+together, fixes k=2's near-chance performance at p=0.0025 or p=0.005.
+
+**The critical read, checking against MWPM's own numbers**: at p=0.01 and
+p=0.02, MWPM itself is already near chance (0.49-0.50) -- the underlying
+decoding problem is too hard for *any* decoder there (well above k=2's
+threshold), so the GNN being near chance at those points is not a meaningful
+comparison and was never real evidence either way. But **at p=0.0025 and
+p=0.005, MWPM clearly does non-trivial, real decoding (5.7% and 26.8% error)
+while the GNN sits at chance (~49-50%) across all three configurations tested
+here** (original lr=1e-3; lr=3e-4 at the small sweep budget; lr=3e-4 at the
+larger E6-matching budget). This survived two different, real attempts at a
+fix. **This is now the most defensible read of H4**: the GNN has a genuine,
+specific difficulty learning k=2 spacelike decoding in the regime where the
+problem is provably still solvable (MWPM proves it) -- not simply an
+optimization/lr artifact that a hyperparameter tweak resolves, but also not
+exhaustively investigated (more epochs at even lower lr, a from-scratch check
+of the k=2 data pipeline for a subtle correctness bug, or architecture
+changes specific to larger graphs were not tried). The original "no real
+distance-scaling advantage" H4 finding stands, now on firmer ground than
+before this recheck, but should be described as "not explained by the two
+most likely optimization causes" rather than as a fully understood
+architectural limit.
 
 ## 5. Boundary-weight edge feature — tested, reverted (see `EDGE_FEATURE_CHECK.md` era commits)
 
@@ -109,12 +138,24 @@ included in the shipped model. Worth retrying with a different encoding
 revisited, since the theoretical motivation (this probability mass is real and
 currently discarded) is still sound even though this specific encoding didn't help.
 
-## Priority if this repo is picked up again
+## Status: both threads now resolved to a stable conclusion
 
-1. Finish the lr instability investigation (item 4) — this is the one that could
-   change conclusions already written into `LIMITATIONS.md`/the paper, not just
-   add a new result.
-2. Recheck the H4 threshold sweep with a k-appropriate learning rate.
-3. Only then decide whether E6/H3 needs a genuinely redesigned metric (report
-   per-excluded-configuration rather than pooled, as already flagged in
-   `LIMITATIONS.md`) on top of the optimization fix.
+1. ~~Finish the lr instability investigation~~ — done: real, partial fix
+   (lr=3e-4 roughly halves the k=1-excluded training failure) but not complete.
+2. ~~Recheck the H4 threshold sweep~~ — done: neither lr nor shot/epoch budget
+   fixes it at the p points that actually matter (0.0025, 0.005, where MWPM
+   proves the problem is solvable). H4's negative finding is now on firmer
+   ground, described precisely (not fully architecturally explained, but
+   survived two real fix attempts) rather than left as "might just be a bug."
+3. Folded into `LIMITATIONS.md` and `paper/main.tex`'s H4 sections.
+
+## If this repo is picked up again
+
+- E6/H3 could still use a genuinely redesigned metric (report
+  per-excluded-configuration rather than pooled, as flagged in
+  `LIMITATIONS.md`) — the lr fix alone won't make the pooled number
+  meaningful, since it's dominated by which config gets excluded.
+- The k=2 training failure at p=0.0025/0.005 (item above) was not
+  exhaustively investigated — a data-pipeline correctness check specific to
+  k=2, or an even lower lr with a longer epoch budget, would be the next
+  things to try, not assumed to be a closed question.
