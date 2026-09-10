@@ -287,15 +287,46 @@ any decoder there, so the GNN failing too was never real evidence. But at
 `p=0.0025` and `p=0.005`, MWPM clearly does non-trivial decoding (5.7% and
 26.8% error) while the GNN sits at chance (~49-50%) across three different
 configurations tested (the original `lr=1e-3`; `lr=3e-4` at the sweep's
-small budget; `lr=3e-4` at a large budget). **This is now the most
-defensible read of H4**: a genuine, specific difficulty learning k=2
-spacelike decoding in a regime that is provably still solvable, which
-survived two real attempts at an optimization fix — not simply a
-hyperparameter artifact, though not exhaustively investigated either (an
-even lower lr with more epochs, or a from-scratch correctness check of the
-k=2 data pipeline specifically, were not tried). Full numbers and the
-E6/H4 investigation history: `results/LR_INSTABILITY_DIAGNOSTIC.md`,
-`results/CRITIQUE_FOLLOWUP.md`.
+small budget; `lr=3e-4` at a large budget).
+
+**A sixth pass exhaustively ruled out every remaining optimization
+explanation, not just lr and budget.** At the exact failing point (k=2,
+spacelike, p=0.0025): 8 different seeds (0-7) all fail identically
+(0.477-0.493 — not a seed lottery); an even lower lr (1e-4) with 40 epochs
+still fails (0.4908); 60 epochs at lr=3e-4 still fails (0.4907); a new
+`use_sum_pool` model option (mean+max+sum instead of mean+max, testing
+whether the pooling discards parity-relevant count information across the
+~18 largely-disconnected components a k=2 shot's graph typically
+fragments into, vs. ~4 at the working k=1 setting — confirmed via
+networkx) doesn't help either (0.471-0.477); and a much larger spatial
+connectivity radius (10.0 vs. 3.0) barely changes the component count
+(18.0 vs. 17.9 — the components are separated in *time*, not space,
+since `temporal_radius` is fixed at 1.0 and isn't currently exposed as a
+tunable parameter). Most decisively: the training loss curve is not
+stuck — it starts at exactly $\ln 2$ (random-guessing baseline) and
+decreases steadily over the first 15 epochs, a real if very slow trend —
+but **a 300-epoch run (15x the normal budget) testing whether that trend
+continues to something useful still gives 0.4914, essentially chance.**
+
+**This settles the question this pass was investigating: more optimization
+budget alone does not fix it, in any form tried.** The gap must be from
+learning capacity, data quantity, or a genuine architectural limitation,
+not simply "wasn't trained enough" or "wrong learning rate." The most
+likely remaining explanation: MWPM solves one global matching problem over
+the full decoding graph (including implicit boundary matches), while this
+GNN's message passing only shares information *within* a connected
+component — cross-component combination happens only at the final
+pooling step, which has to implicitly learn something parity-like across
+~18 largely-independent pieces of evidence, a well-documented hard case
+for gradient-based learning generally. The most promising untried fix is a
+virtual "boundary" supernode connected to every detector node (giving
+message passing itself, not just pooling, a channel between components —
+mirroring MWPM's own boundary node), which is a real graph-construction
+change, not a hyperparameter check, and wasn't attempted. Whether 15,000
+shots is simply too little data for a problem this combinatorially rich
+was also not isolated. Full numbers and the complete investigation
+history: `results/LR_INSTABILITY_DIAGNOSTIC.md`,
+`results/K2_TRAINING_DEEP_DIVE.md`, `results/CRITIQUE_FOLLOWUP.md`.
 - **The union-find baseline (`baselines/union_find.py`) uses two
   documented simplifications**: whole-edge growth per round instead of
   scheduled half-edges (slightly suboptimal but still a valid decoder —

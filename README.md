@@ -142,7 +142,8 @@ more code distance still doesn't help it the way it helps MWPM — edge
 features improved absolute accuracy a lot without fixing this.
 
 **Follow-up: is this a training bug, not a real finding?** Checked directly
-— see `results/LR_INSTABILITY_DIAGNOSTIC.md` and `results/CRITIQUE_FOLLOWUP.md`.
+— see `results/LR_INSTABILITY_DIAGNOSTIC.md`, `results/K2_TRAINING_DEEP_DIVE.md`,
+and `results/CRITIQUE_FOLLOWUP.md`.
 A real optimization problem was found (training on k≥2 data alone degrades
 badly at the current tuned `lr=1e-3`, partially fixed by `lr=3e-4`), so the
 k=2 curve here was rechecked at the lower lr — twice, at two different
@@ -151,10 +152,33 @@ numbers: at p=0.01/0.02 MWPM itself is already at chance, so the GNN
 failing there was never real evidence; but at **p=0.0025 and p=0.005,
 MWPM clearly decodes non-trivially (5.7%, 26.8% error) while the GNN sits
 at chance across all three configurations tested.** This survived two real
-fix attempts — the current read is that this is a genuine, specific k=2
-learning difficulty, not simply a hyperparameter artifact, though not
-exhaustively investigated (an even lower lr with more epochs, or a
-from-scratch check of the k=2 data pipeline, weren't tried).
+fix attempts.
+
+A further, exhaustive pass then ruled out every remaining optimization
+explanation at the exact failing point (k=2, spacelike, p=0.0025): **8
+different seeds** all fail identically (0.477–0.493, not a seed lottery);
+`lr=1e-4` with 40 epochs still fails (0.4908); 60 epochs at `lr=3e-4` still
+fails (0.4907); a new sum-pooling model option (testing whether mean+max
+pooling was discarding parity-relevant information across the ~18
+largely-disconnected components a k=2 shot's graph typically fragments
+into, vs. ~4 at the working k=1 setting) doesn't help (0.471–0.477); and a
+much larger spatial connectivity radius barely changes the component count
+(18.03 vs. 17.86) — the components are separated in *time*, not space. Most
+tellingly, the training loss curve isn't stuck — it starts at exactly ln(2)
+and decreases steadily over 15 epochs, a real if slow trend — but a
+**300-epoch run (15x the normal budget) testing whether that trend
+continues to something useful still lands at 0.4914, essentially chance.**
+More optimization budget, in every form tried, does not fix this — the
+question this pass set out to answer (lr, epochs, seeds, pooling, data
+locality) is now settled. The most likely remaining explanation: this
+GNN's message passing only shares information *within* a connected
+component, so combining ~18 largely-independent components into one label
+happens only at the final pooling step — a genuinely hard, parity-like
+combination for gradient descent, unlike MWPM's single global matching
+problem. The most promising untried fix is a virtual "boundary" supernode
+connected to every detector node, giving message passing itself (not just
+pooling) a cross-component channel, mirroring MWPM's own boundary node —
+a real graph-construction change, not attempted here.
 
 ## The headline result so far
 

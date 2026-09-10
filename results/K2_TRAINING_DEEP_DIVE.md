@@ -51,39 +51,64 @@ effectively-stuck convergence on standard architectures/initializations) --
 independent of this project, a well-documented pathology in the ML
 literature, not something specific to this codebase.
 
-**Support for this reading, not yet a proof**: tracked the actual training
-loss curve at this exact (k=2, p=0.0025) point, standard config, 15 epochs.
-It is *not* stuck -- BCE loss starts at 0.6946 (== $\ln 2$, the exact
-random-guessing baseline) and decreases steadily to 0.6869 by epoch 15, a
-real if very slow trend. This is consistent with (though doesn't prove) a
-parity-like problem that SGD is slowly making progress on rather than one
-that is architecturally unreachable. A 300-epoch run was launched to check
-whether this slow trend continues to a meaningfully better error rate given
-enough budget -- **result pending, not yet in this file; check
-`/tmp/long_train.log` or a later revision of this file / `LIMITATIONS.md`
-for the outcome** (this note exists so the interim state is captured even
-if that run doesn't finish this session).
+**Tracked the actual training loss curve** at this exact (k=2, p=0.0025)
+point, standard config, 15 epochs. It is *not* stuck initially -- BCE loss
+starts at 0.6946 (== $\ln 2$, the exact random-guessing baseline) and
+decreases to 0.6869 by epoch 15, a real if very slow trend.
 
-## What would actually confirm or refute this
+**Then tested whether that trend continues to something useful given a much
+longer budget: 300 epochs (15x the normal 20).** Result: **0.4914 -- still
+chance.** This is decisive. Combined with everything above (lr, seeds,
+pooling, radius all ruled out; now epoch budget up to 300 ruled out too),
+**this is not an optimization-budget problem**. Either the slow initial
+loss decrease was fitting noise/overfitting to the training set without
+generalizing (15,000 shots may simply not be enough data for an
+~18-component combinatorial problem), or the model plateaus at a bad
+solution the current architecture cannot escape via gradient descent
+regardless of budget. Either way, **more training time alone does not fix
+this.**
 
-Not done here (time-bounded investigation):
+## Bottom line
 
-1. Finish the 300-epoch run above. If error rate drops substantially
-   (e.g. below ~30%, matching order-of-magnitude with MWPM's 5.7%), this
-   is a slow-convergence/capacity issue, not a hard architectural wall --
-   worth knowing precisely where the diminishing-returns point is.
-2. A virtual "boundary" supernode connected to every detector node (edge
-   weight = that node's own boundary log-odds, the same information tried
-   and reverted as a *node* feature earlier this session) would directly
-   give the GNN a channel to route information *between* the ~18
-   components, mirroring how MWPM's own decoding graph includes an
-   explicit boundary node. This is architecturally different from both the
-   reverted node-feature attempt and the sum-pooling test above (neither
-   added actual graph *connectivity* between components) and is the most
-   promising untried fix, but is a real graph-construction change (`data/
-   to_graph.py`), not a quick hyperparameter check -- not attempted here.
-3. A synthetic parity-learning sanity check (train this exact architecture
+Exhaustively tested within this investigation's scope: learning rate
+(1e-3, 3e-4, 1e-4), epoch budget (20, 40, 60, 300), 8 different seeds,
+pooling type (mean+max vs.\ mean+max+sum), and spatial connectivity radius
+(3.0 vs.\ 10.0). **None fix it.** This is a genuine, reproducible
+architectural/representational limitation specific to k=2 (and presumably
+k=3) surgery decoding in the regime where the underlying problem is still
+solvable (MWPM proves it), not a hyperparameter miss or a training bug.
+The most likely remaining explanation: this GNN's message passing only
+shares information *within* a connected component, and the ~18
+largely-independent components a k=2 shot's graph fragments into require
+something like parity-style reasoning across all of them to get the label
+right -- reasoning that only happens at the final (mean/max/sum) pooling
+step, a genuinely hard combination for gradient descent to discover
+(parity-of-many-variables is a well-documented hard case in the ML
+literature generally, not specific to this codebase).
+
+## What would actually confirm or fix this (not done here)
+
+1. **A virtual "boundary" supernode** connected to every detector node
+   (edge weight = that node's own boundary log-odds -- the same
+   information tried and reverted as a *node* feature earlier this
+   session) would directly give the GNN a channel to route information
+   *between* the ~18 components during message passing itself, not just
+   at the final pooling step -- mirroring how MWPM's own decoding graph
+   includes an explicit boundary node it can match any detector to. This
+   is architecturally different from both the reverted node-feature
+   attempt and the sum-pooling test above (neither added actual graph
+   *connectivity* between components). This is the most promising
+   remaining fix, but is a real graph-construction change (`data/
+   to_graph.py`) plus model changes, not a quick hyperparameter check --
+   not attempted in this investigation.
+2. A synthetic parity-learning sanity check (train this exact architecture
    on a constructed task that's provably a parity function of N inputs,
-   varying N) would confirm whether the "parity is hard for SGD" hypothesis
-   applies to this specific architecture at a component-count around 18,
-   independent of the quantum-error-correction domain specifics. Not done.
+   varying N) would confirm whether "parity is hard for SGD" applies to
+   this specific architecture at a component-count around 18, independent
+   of the quantum-error-correction domain specifics. Not done.
+3. Whether 15,000 training shots is simply too few for a problem this
+   combinatorially rich (as opposed to an architectural ceiling) was not
+   isolated -- a much larger shot count (e.g. 150,000+) at this exact
+   (k=2, p=0.0025) point, matching the 10x-shots test already done for E2,
+   would help distinguish "needs more data" from "needs a different
+   architecture."
