@@ -59,22 +59,43 @@ used elsewhere in this repo (e.g. `results/main_table.md`) are less powerful tha
 this paired test; worth redoing for other headline comparisons if this repo is
 picked up again.
 
-## 4. E6/H3 — real methodological bug found, partial fix found, NOT fully resolved
+## 4. E6/H3 — real methodological bug found, partial fix confirmed, NOT fully resolved
 
-See `LR_INSTABILITY_DIAGNOSTIC.md` for the full story. Short version: E6 with
-only 2 swept configs always trains on exactly 1 config (no real domain
-randomization happens at all), and separately, `lr=1e-3` (validated only on k=1
-data) causes real training instability/failure on k=2/k=3-only training data
-(near-chance train-set performance, not a generalization issue). A lower lr
-(3e-4) helps but an 8-seed confirmation run was interrupted at n=5 with mixed
-results (not a clean fix). **This also raises a real, unresolved question about
-whether the H4 threshold sweep's "GNN shows no distance-scaling advantage"
-finding is itself confounded by this same k>=2 training instability** — the
-GNN's k=2 curve in `results/timelike_threshold.png` shows the same "jumps to
-chance and flatlines" signature as the confirmed training failures here. This
-was NOT rechecked before the session ended. Treat the current H4 "negative"
-finding in `LIMITATIONS.md`/`paper/main.tex` as unconfirmed pending this recheck,
-not as settled.
+See `LR_INSTABILITY_DIAGNOSTIC.md` for the full story, now updated with a
+completed n=8 confirmation (the earlier n=5 was from a session interruption,
+since resolved). Short version: E6 with only 2 swept configs always trains on
+exactly 1 config (no real domain randomization happens at all), and
+separately, `lr=1e-3` (validated only on k=1 data) causes real training
+degradation on k=2/k=3-only training data. **Confirmed with the full n=8**:
+lowering lr to 3e-4 cuts the k=1-excluded training failure roughly in half
+(0.478 -> 0.342 mean train-set error) — a real, substantial, but partial fix.
+Training on k=2/k=3 alone still converges meaningfully worse than training
+with k=1 included (0.342 vs 0.136), so lr was not the whole story.
+
+## 4b. H4 threshold-sweep recheck — lr was NOT the explanation there; budget is the leading suspect
+
+Reran the k=2 GNN curve (`experiments/e7_threshold_sweep.py`'s own p-grid,
+spacelike + timelike) at `lr=3e-4` instead of the original `1e-3`, first at
+the threshold sweep's own (smaller) budget — 8000 train shots, 15 epochs:
+
+| p | spacelike (lr=3e-4) | spacelike (original, lr=1e-3) | timelike (lr=3e-4) | timelike (original, lr=1e-3) |
+|---|---|---|---|---|
+| 0.0012 | 0.090 | 0.065 | 0.486 | 0.476 |
+| 0.0025 | 0.490 | 0.482 | 0.495 | 0.502 |
+| 0.005  | 0.501 | 0.488 | 0.499 | 0.504 |
+| 0.01   | 0.504 | 0.499 | 0.500 | 0.508 |
+| 0.02   | 0.494 | 0.495 | 0.485 | 0.509 |
+
+**Essentially unchanged.** Lowering lr alone, at the threshold sweep's own
+smaller shot/epoch budget, did NOT fix the "jumps to chance at p=0.0025 and
+stays flat" pattern. This means the E6 fix doesn't directly transfer here —
+the threshold sweep's specific budget (8000 shots/15 epochs, deliberately
+kept cheap since it trains 20 separate models per full sweep) may simply be
+insufficient for k=2 regardless of lr. A follow-up test at the *larger*,
+E6-matching budget (15000 shots/20 epochs) + lr=3e-4 was launched to
+disambiguate "is it budget, or is it something else entirely" — see below /
+whatever this file says was appended after this point, or `main.tex`/
+`LIMITATIONS.md` if that recheck was completed and folded in.
 
 ## 5. Boundary-weight edge feature — tested, reverted (see `EDGE_FEATURE_CHECK.md` era commits)
 
