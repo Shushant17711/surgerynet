@@ -109,6 +109,7 @@ def train_gnn(
     device: str | None = None,
     wandb_run: Any | None = None,
     edge_dim: int | None = None,
+    use_sum_pool: bool = False,
 ) -> GNNDecoder:
     """The one training loop E2/E5/E6/E7/E9 all build a model and run
     through (previously each hand-rolled its own copy of this loop with
@@ -145,7 +146,7 @@ def train_gnn(
     torch.manual_seed(seed)
     model = GNNDecoder(
         hidden_dim=hidden_dim, num_layers=num_layers, conv_type=conv_type, heads=heads, use_norm=use_norm,
-        edge_dim=edge_dim,
+        edge_dim=edge_dim, use_sum_pool=use_sum_pool,
     ).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     rng = np.random.default_rng(seed)

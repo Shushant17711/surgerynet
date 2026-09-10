@@ -36,6 +36,7 @@ def run(
     weight_decay: float = 1e-4,
     device: str | None = None,
     edge_dim: int | None = NUM_EDGE_FEATURES,
+    use_sum_pool: bool = False,
 ) -> tuple[ExperimentResult, GNNDecoder]:
     """`p`/`k` are recorded on the result but not used to build the
     circuit — record the same (k, p) the caller generated
@@ -51,7 +52,7 @@ def run(
         train_graphs,
         hidden_dim=hidden_dim, num_layers=num_layers, conv_type=conv_type, heads=heads, use_norm=use_norm,
         lr=lr, weight_decay=weight_decay, epochs=epochs, batch_size=batch_size, seed=seed, device=device,
-        edge_dim=edge_dim,
+        edge_dim=edge_dim, use_sum_pool=use_sum_pool,
     )
 
     test_batch = sample_shots(circuit, shots=test_shots, seed=seed + 1)

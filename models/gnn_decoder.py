@@ -22,7 +22,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 from torch_geometric.data import Batch
-from torch_geometric.nn import GATConv, TransformerConv, global_max_pool, global_mean_pool
+from torch_geometric.nn import GATConv, TransformerConv, global_add_pool, global_max_pool, global_mean_pool
 
 from schema import NUM_NODE_FEATURES, OUTPUT_HEADS
 
@@ -39,6 +39,7 @@ class GNNDecoder(nn.Module):
         heads: int = 4,
         use_norm: bool = True,
         edge_dim: int | None = None,
+        use_sum_pool: bool = False,
     ) -> None:
         super().__init__()
         if not 4 <= num_layers <= 6:
@@ -49,6 +50,7 @@ class GNNDecoder(nn.Module):
 
         self.use_norm = use_norm
         self.edge_dim = edge_dim
+        self.use_sum_pool = use_sum_pool
         self.input_proj = nn.Linear(in_channels, hidden_dim)
         self.convs = nn.ModuleList(
             ConvCls(hidden_dim, hidden_dim // heads, heads=heads, concat=True, edge_dim=edge_dim)
@@ -57,11 +59,21 @@ class GNNDecoder(nn.Module):
         self.norms = nn.ModuleList(
             (nn.LayerNorm(hidden_dim) if use_norm else nn.Identity()) for _ in range(num_layers)
         )
+        # `use_sum_pool` (post-hoc, investigating the k>=2 training difficulty):
+        # mean+max pooling discards *how many* fired-detector nodes contributed —
+        # exactly the information a parity/XOR-style decision needs when a shot's
+        # graph fragments into many small, mostly-disconnected components (median
+        # 18 components at k=2/p=0.0025, vs 4 at the k=1 setting that trains
+        # fine — verified via networkx, see results/POOLING_INVESTIGATION.md).
+        # global_add_pool (sum) preserves that count/parity-relevant signal that
+        # mean/max cannot. Off by default so existing checkpoints/tests keep
+        # their exact (2*hidden_dim)-wide head input.
+        pool_width = 3 if use_sum_pool else 2
         self.head_spacelike = nn.Sequential(
-            nn.Linear(2 * hidden_dim, hidden_dim), nn.ReLU(), nn.Linear(hidden_dim, 1)
+            nn.Linear(pool_width * hidden_dim, hidden_dim), nn.ReLU(), nn.Linear(hidden_dim, 1)
         )
         self.head_timelike = nn.Sequential(
-            nn.Linear(2 * hidden_dim, hidden_dim), nn.ReLU(), nn.Linear(hidden_dim, 1)
+            nn.Linear(pool_width * hidden_dim, hidden_dim), nn.ReLU(), nn.Linear(hidden_dim, 1)
         )
 
     def forward(self, batch: Batch) -> dict[str, torch.Tensor]:
@@ -72,7 +84,10 @@ class GNNDecoder(nn.Module):
 
         mean_pool = global_mean_pool(x, batch.batch, size=batch.num_graphs)
         max_pool = global_max_pool(x, batch.batch, size=batch.num_graphs)
-        pooled = torch.cat([mean_pool, max_pool], dim=1)
+        pools = [mean_pool, max_pool]
+        if self.use_sum_pool:
+            pools.append(global_add_pool(x, batch.batch, size=batch.num_graphs))
+        pooled = torch.cat(pools, dim=1)
 
         return {
             "spacelike": self.head_spacelike(pooled).squeeze(-1),
