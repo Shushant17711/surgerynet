@@ -242,3 +242,7 @@ Short version — full version in `LIMITATIONS.md`:
   hardware noise model.
 - The hand-rolled Stim circuit builder (`circuits/lattice_surgery.py`) does not
   work; every reported result comes from the TQEC backend.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
